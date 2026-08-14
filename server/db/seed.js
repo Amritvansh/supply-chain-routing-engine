@@ -85,24 +85,25 @@ async function seed() {
     console.log('\nSeeding warehouses...');
     const warehouseIds = [];
     for (const wh of warehouses) {
-      const { rows } = await client.query(
-        `INSERT INTO warehouses (name, lat, lng)
-         VALUES ($1, $2, $3)
-         ON CONFLICT DO NOTHING
-         RETURNING id`,
-        [wh.name, wh.lat, wh.lng]
+      // Check if warehouse already exists by name (no UNIQUE constraint on name,
+      // so we check explicitly to make the seed safely repeatable)
+      const existing = await client.query(
+        'SELECT id FROM warehouses WHERE name = $1 LIMIT 1',
+        [wh.name]
       );
-      if (rows.length > 0) {
-        warehouseIds.push(rows[0].id);
-        console.log(`  INSERT warehouse: ${wh.name}`);
-      } else {
-        // Already exists — fetch its id
-        const existing = await client.query(
-          'SELECT id FROM warehouses WHERE name = $1',
-          [wh.name]
-        );
+
+      if (existing.rows.length > 0) {
         warehouseIds.push(existing.rows[0].id);
         console.log(`  SKIP  warehouse: ${wh.name} (already exists)`);
+      } else {
+        const { rows } = await client.query(
+          `INSERT INTO warehouses (name, lat, lng)
+           VALUES ($1, $2, $3)
+           RETURNING id`,
+          [wh.name, wh.lat, wh.lng]
+        );
+        warehouseIds.push(rows[0].id);
+        console.log(`  INSERT warehouse: ${wh.name}`);
       }
     }
 
