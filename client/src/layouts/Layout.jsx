@@ -3,8 +3,13 @@
  *
  * Wraps all pages with a fixed sidebar and a scrollable main content area.
  * Uses React Router's NavLink for active route indication.
+ *
+ * Responsive behavior:
+ *   - Desktop (≥ 768px): Fixed sidebar always visible
+ *   - Mobile (< 768px): Sidebar collapses into a hamburger overlay
  */
-import { NavLink, Outlet } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
 
 const navItems = [
   {
@@ -37,12 +42,59 @@ const navItems = [
 ];
 
 export default function Layout() {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const location = useLocation();
+
+  // Close sidebar on route change (mobile)
+  useEffect(() => {
+    setSidebarOpen(false);
+  }, [location.pathname]);
+
+  // Close sidebar on escape key
+  useEffect(() => {
+    function handleKeyDown(e) {
+      if (e.key === 'Escape' && sidebarOpen) {
+        setSidebarOpen(false);
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [sidebarOpen]);
+
   return (
-    <div className="flex min-h-screen">
+    <div className={`flex min-h-screen ${sidebarOpen ? 'sidebar-mobile-open' : ''}`}>
+      {/* ─── Mobile Hamburger ──────────────────────────── */}
+      <button
+        onClick={() => setSidebarOpen((prev) => !prev)}
+        className="fixed top-4 left-4 z-50 md:hidden w-10 h-10 rounded-lg bg-[var(--color-bg-card)] border border-[var(--color-border)] flex items-center justify-center text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-accent)] transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
+        aria-label={sidebarOpen ? 'Close navigation menu' : 'Open navigation menu'}
+        aria-expanded={sidebarOpen}
+      >
+        {sidebarOpen ? (
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+          </svg>
+        ) : (
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+          </svg>
+        )}
+      </button>
+
+      {/* ─── Mobile Backdrop ───────────────────────────── */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black/50 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
       {/* ─── Sidebar ──────────────────────────────────── */}
       <aside
-        className="fixed top-0 left-0 h-screen flex flex-col border-r border-[var(--color-border)] bg-[var(--color-bg-sidebar)]"
-        style={{ width: 'var(--sidebar-width)' }}
+        className={`fixed top-0 left-0 h-screen flex flex-col border-r border-[var(--color-border)] bg-[var(--color-bg-sidebar)] z-40 transition-transform duration-300 ease-in-out w-[260px] ${
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+        }`}
       >
         {/* Logo / Brand */}
         <div className="px-5 py-6 border-b border-[var(--color-border)]">
@@ -62,7 +114,7 @@ export default function Layout() {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 px-3 py-4 space-y-1">
+        <nav className="flex-1 px-3 py-4 space-y-1" aria-label="Main navigation">
           {navItems.map((item) => (
             <NavLink
               key={item.to}
@@ -95,10 +147,16 @@ export default function Layout() {
 
       {/* ─── Main Content ─────────────────────────────── */}
       <main
-        className="flex-1 p-8 overflow-auto"
-        style={{ marginLeft: 'var(--sidebar-width)' }}
+        className="flex-1 p-6 md:p-8 overflow-auto pt-16 md:pt-8"
+        style={{ marginLeft: '0' }}
       >
-        <Outlet />
+        {/* Spacer for sidebar on desktop */}
+        <div className="hidden md:block" style={{ marginLeft: '260px' }}>
+          {/* Empty — layout offset handled below */}
+        </div>
+        <div className="md:ml-[260px]">
+          <Outlet />
+        </div>
       </main>
     </div>
   );
