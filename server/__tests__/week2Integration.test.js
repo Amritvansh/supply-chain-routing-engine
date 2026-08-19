@@ -351,14 +351,38 @@ describe('Gemini Client', () => {
 // §4 — HTTP ROUTE TESTS (SUPERTEST + MOCKED DB)
 // ═══════════════════════════════════════════════════════════════
 
-const request = require('supertest');
-const app = require('../app');
+// Mock pg module for health.js
+jest.mock('pg', () => {
+  const queryMock = jest.fn();
+  return {
+    Pool: jest.fn().mockImplementation(() => ({
+      query: queryMock,
+    })),
+    _queryMock: queryMock,
+  };
+});
+
+// Mock ioredis module for health.js
+jest.mock('ioredis', () => {
+  const pingMock = jest.fn();
+  const RedisMock = jest.fn().mockImplementation(() => ({
+    on: jest.fn(),
+    connect: jest.fn(),
+    ping: pingMock,
+    disconnect: jest.fn(),
+  }));
+  RedisMock._pingMock = pingMock;
+  return RedisMock;
+});
 
 // Mock the database pool
 jest.mock('../db/pool', () => ({
   query: jest.fn(),
   on: jest.fn(),
 }));
+
+const request = require('supertest');
+const app = require('../app');
 
 // Mock aiExplanations DB helper
 jest.mock('../db/aiExplanations', () => ({
@@ -773,3 +797,283 @@ describe('POST /api/v1/webhooks/logistics', () => {
     expect(res.body.error.code).toBe('INVALID_SHIPMENT_ID');
   });
 });
+
+// ═══════════════════════════════════════════════════════════════
+// §5 — DASHBOARD MAP-DATA TESTS
+// ═══════════════════════════════════════════════════════════════
+
+describe('GET /api/v1/dashboard/map-data', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('returns warehouses with health status and routes', async () => {
+    // First query: warehouses with inventory health
+    mockPool.query
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: 'w1',
+            name: 'Delhi Hub',
+            lat: 28.6139,
+            lng: 77.209,
+            active: true,
+            total_stock: 150,
+            low_stock_skus: 0,
+            total_skus: 3,
+          },
+          {
+            id: 'w2',
+            name: 'Mumbai Hub',
+            lat: 19.076,
+            lng: 72.8777,
+            active: true,
+            total_stock: 12,
+            low_stock_skus: 2,
+            total_skus: 3,
+          },
+        ],
+      })
+      // Second query: recent orders with shipments
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            order_id: 'order-1',
+            customer_lat: 28.5,
+            customer_lng: 77.1,
+            status: 'ROUTED',
+            created_at: '2026-08-18T00:00:00Z',
+            shipment_id: 'ship-1',
+            warehouse_id: 'w1',
+            warehouse_name: 'Delhi Hub',
+            warehouse_lat: 28.6139,
+            warehouse_lng: 77.209,
+            distance_km: '15.20',
+            box_size: 'MEDIUM',
+            total_cost: '10.60',
+          },
+        ],
+      });
+
+    const res = await request(app).get('/api/v1/dashboard/map-data');
+
+    expect(res.status).toBe(200);
+    expect(res.body.warehouses).toHaveLength(2);
+
+    const delhi = res.body.warehouses.find(w => w.name === 'Delhi Hub');
+    expect(delhi.healthStatus).toBe('healthy');
+    expect(delhi.totalStock).toBe(150);
+
+    const mumbai = res.body.warehouses.find(w => w.name === 'Mumbai Hub');
+    expect(mumbai.healthStatus).toBe('low_stock');
+    expect(mumbai.lowStockSkus).toBe(2);
+
+    expect(res.body.routes).toHaveLength(1);
+    expect(res.body.routes[0].orderId).toBe('order-1');
+    expect(res.body.routes[0].customer.lat).toBe(28.5);
+    expect(res.body.routes[0].shipments).toHaveLength(1);
+    expect(res.body.routes[0].shipments[0].warehouseName).toBe('Delhi Hub');
+  });
+
+  test('returns empty arrays when no data exists', async () => {
+    mockPool.query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    const res = await request(app).get('/api/v1/dashboard/map-data');
+
+    expect(res.status).toBe(200);
+    expect(res.body.warehouses).toEqual([]);
+    expect(res.body.routes).toEqual([]);
+  });
+
+  test('returns 500 on database error', async () => {
+    mockPool.query.mockRejectedValue(new Error('Connection refused'));
+
+    const res = await request(app).get('/api/v1/dashboard/map-data');
+
+    expect(res.status).toBe(500);
+    expect(res.body.error).toBeDefined();
+  });
+
+  test('supports limit query parameter', async () => {
+    mockPool.query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    const res = await request(app).get('/api/v1/dashboard/map-data?limit=10');
+
+    expect(res.status).toBe(200);
+    // Verify the limit was passed to the query
+    const orderQuery = mockPool.query.mock.calls[1];
+    expect(orderQuery[1]).toEqual([10]);
+  });
+
+  test('clamps limit to valid range', async () => {
+    mockPool.query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    const res = await request(app).get('/api/v1/dashboard/map-data?limit=999');
+
+    expect(res.status).toBe(200);
+    // Limit should be clamped to 200
+    const orderQuery = mockPool.query.mock.calls[1];
+    expect(orderQuery[1]).toEqual([200]);
+  });
+
+  test('groups multiple shipments under one order', async () => {
+    mockPool.query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            order_id: 'order-split',
+            customer_lat: 28.5,
+            customer_lng: 77.1,
+            status: 'ROUTED',
+            created_at: '2026-08-18T00:00:00Z',
+            shipment_id: 'ship-a',
+            warehouse_id: 'w1',
+            warehouse_name: 'Delhi Hub',
+            warehouse_lat: 28.6139,
+            warehouse_lng: 77.209,
+            distance_km: '15.20',
+            box_size: 'MEDIUM',
+            total_cost: '10.60',
+          },
+          {
+            order_id: 'order-split',
+            customer_lat: 28.5,
+            customer_lng: 77.1,
+            status: 'ROUTED',
+            created_at: '2026-08-18T00:00:00Z',
+            shipment_id: 'ship-b',
+            warehouse_id: 'w2',
+            warehouse_name: 'Mumbai Hub',
+            warehouse_lat: 19.076,
+            warehouse_lng: 72.8777,
+            distance_km: '1150.00',
+            box_size: 'LARGE',
+            total_cost: '582.00',
+          },
+        ],
+      });
+
+    const res = await request(app).get('/api/v1/dashboard/map-data');
+
+    expect(res.status).toBe(200);
+    expect(res.body.routes).toHaveLength(1);
+    expect(res.body.routes[0].shipments).toHaveLength(2);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// §6 — STUB ENDPOINT TESTS (Week 3 — verify 501)
+// ═══════════════════════════════════════════════════════════════
+
+describe('Week 3 Stub Endpoints', () => {
+  test('POST /api/v1/orders/checkout returns 501', async () => {
+    const res = await request(app)
+      .post('/api/v1/orders/checkout')
+      .send({});
+
+    expect(res.status).toBe(501);
+    expect(res.body.error.code).toBe('NOT_IMPLEMENTED');
+  });
+
+  test('POST /api/v1/orders/flash-test returns 501', async () => {
+    const res = await request(app)
+      .post('/api/v1/orders/flash-test')
+      .send({});
+
+    expect(res.status).toBe(501);
+    expect(res.body.error.code).toBe('NOT_IMPLEMENTED');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// §7 — HEALTH CHECK TESTS
+// ═══════════════════════════════════════════════════════════════
+
+describe('GET /api/v1/health', () => {
+  // Capture the mock instances that were injected into the app BEFORE any jest.resetModules()
+  // could recreate the mock factory outputs.
+  const pg = require('pg');
+  const Redis = require('ioredis');
+  const pgQueryMock = pg._queryMock;
+  const redisPingMock = Redis._pingMock;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('returns 200 ok when both db and redis are healthy', async () => {
+    pgQueryMock.mockImplementation(async () => {
+      console.log('--- pgQueryMock hit (ok test) ---');
+      return { rows: [{ '?column?': 1 }] };
+    });
+    redisPingMock.mockImplementation(async () => {
+      console.log('--- redisPingMock hit (ok test) ---');
+      return 'PONG';
+    });
+
+    const res = await request(app).get('/api/v1/health');
+
+    expect(res.status).toBe(200);
+    expect(res.body.db).toBe(true);
+    expect(res.body.redis).toBe(true);
+    expect(res.body.status).toBe('ok');
+  });
+
+  test('returns 200 degraded when db fails', async () => {
+    pgQueryMock.mockImplementation(async () => {
+      console.log('--- pgQueryMock hit (db fail test) ---');
+      throw new Error('DB Connection failed');
+    });
+    redisPingMock.mockImplementation(async () => {
+      console.log('--- redisPingMock hit (db fail test) ---');
+      return 'PONG';
+    });
+
+    const res = await request(app).get('/api/v1/health');
+
+    expect(res.status).toBe(200);
+    expect(res.body.db).toBe(false);
+    expect(res.body.redis).toBe(true);
+    expect(res.body.status).toBe('degraded');
+  });
+
+  test('returns 200 degraded when redis fails', async () => {
+    pgQueryMock.mockImplementation(async () => {
+      console.log('--- pgQueryMock hit (redis fail test) ---');
+      return { rows: [{ '?column?': 1 }] };
+    });
+    redisPingMock.mockImplementation(async () => {
+      console.log('--- redisPingMock hit (redis fail test) ---');
+      throw new Error('Redis Connection failed');
+    });
+
+    const res = await request(app).get('/api/v1/health');
+
+    expect(res.status).toBe(200);
+    expect(res.body.db).toBe(true);
+    expect(res.body.redis).toBe(false);
+    expect(res.body.status).toBe('degraded');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// §8 — 404 CATCH-ALL TEST
+// ═══════════════════════════════════════════════════════════════
+
+describe('404 Catch-All', () => {
+  test('returns 404 with error structure for unknown routes', async () => {
+    const res = await request(app).get('/api/v1/nonexistent');
+
+    expect(res.status).toBe(404);
+    expect(res.body.error.code).toBe('NOT_FOUND');
+    expect(res.body.error.message).toContain('not found');
+  });
+});
+

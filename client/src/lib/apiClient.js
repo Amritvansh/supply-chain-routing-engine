@@ -99,3 +99,21 @@ export function triggerFlashTest(params) {
     body: JSON.stringify(params),
   });
 }
+
+/**
+ * Check backend health (PostgreSQL + Redis connectivity).
+ */
+export function getHealth() {
+  return request('/health');
+}
+
+/**
+ * Send a simulated logistics webhook status update.
+ * @param {{ shipment_id: string, status: string }} data
+ */
+export function sendLogisticsWebhook(data) {
+  return request('/webhooks/logistics', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
