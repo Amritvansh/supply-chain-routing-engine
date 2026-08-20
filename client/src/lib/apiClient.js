@@ -38,6 +38,7 @@ async function request(endpoint, options = {}) {
     error.status = response.status;
     error.code = body?.error?.code || 'UNKNOWN_ERROR';
     error.body = body;
+    error.retryAfter = response.headers.get('Retry-After');
     throw error;
   }
 
