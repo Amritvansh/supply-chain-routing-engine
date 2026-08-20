@@ -133,7 +133,7 @@ These three pieces are exactly what feeds the Gemini prompt in §1.5 — the AI 
 |---|---|
 | **M1 — Core Algorithms & DB Lead** | Schema incl. `ai_explanations` table, migrations, Redis locks, ACID transactions, bin-packing, cost function |
 | **M2 — API & Orchestration Lead** | Express server, Maps + Haversine fallback, **Gemini service + `/explain` endpoint**, webhook simulator, checkout controller, flash-test endpoint, stress scripts |
-| **M3 — Frontend & Geospatial Lead** | React, Tailwind, Mapbox Control Tower, Order Simulator, Recharts analytics, **AI Explainability widget** |
+| **M3 — Frontend & Geospatial Lead** | React, Tailwind, MapLibre, dashboards, AI explanation widget |
 
 ---
 
@@ -212,7 +212,7 @@ TASKS:
 3. Build a Layout with sidebar nav to those pages.
 4. Create src/lib/apiClient.js targeting the /api/v1 prefix, with methods: checkout(), getOrder(id), getExplanation(id), getWarehouses(), getMapData(), triggerFlashTest(params).
 5. Create a placeholder AIExplanationWidget component (src/components/AIExplanationWidget.jsx) — empty shell for now, just accepts an orderId prop and renders "Explanation pending" — will be wired up in Week 2.
-6. Add .env.example with VITE_API_URL and VITE_MAPBOX_TOKEN. Confirm clean build with no console errors.
+6. Add .env.example with VITE_API_URL. Confirm clean build with no console errors.
 
 GIT RULES — NON-NEGOTIABLE FOR THIS SESSION:
 1. NEVER run `git push` on your own initiative. Local commits only.
@@ -282,7 +282,7 @@ CURRENT ROLE: You are acting as Member 3 (Frontend & Geospatial Lead).
 BRANCH: feat/m3-w2-map-and-explainability
 
 TASKS:
-1. Integrate Mapbox GL JS into ControlTowerDashboard, plotting warehouses from apiClient.getWarehouses() with low-stock vs healthy marker styling and a legend.
+1. Integrate MapLibre GL JS into `ControlTowerDashboard`, plotting warehouses from `apiClient.getWarehouses()` with low-stock vs healthy marker styling and a legend.
 2. Wire up the AIExplanationWidget placeholder from Week 1: it should poll or single-call apiClient.getExplanation(orderId) after an order is placed, show a "Generating explanation…" loading state, then render the returned text. If the response's `source` field is `fallback_template`, show a small subtle badge like "computed summary" instead of "AI explanation" — do not treat this as an error state, just a quieter label.
 3. Add loading/error states for the map data fetch (skeleton + retry).
 4. Make layout responsive.
@@ -290,7 +290,7 @@ TASKS:
 GIT RULES — NON-NEGOTIABLE FOR THIS SESSION:
 1. NEVER run `git push` on your own initiative. Local commits only.
 2. After making local commits, STOP and ask exactly: "Ready to push to GitHub — proceed? (yes/no)"
-3. Commit granularity: separate commits for (a) Mapbox integration+markers, (b) AIExplanationWidget wiring incl. fallback-source badge, (c) loading/error states, (d) responsive fixes. Use conventional-commit messages.
+3. Commit granularity: separate commits for (a) MapLibre integration+markers, (b) AIExplanationWidget wiring incl. fallback-source badge, (c) loading/error states, (d) responsive fixes. Use conventional-commit messages.
 ```
 
 ---
