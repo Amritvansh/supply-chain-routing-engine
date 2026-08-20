@@ -13,11 +13,8 @@
  *   - Loaded → interactive map + stats
  */
 import { useState, useEffect, useRef, useCallback } from 'react';
-import mapboxgl from 'mapbox-gl';
+import maplibregl from 'maplibre-gl';
 import * as api from '../lib/apiClient';
-
-const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
-
 /**
  * Low-stock threshold — matches the deterministic engine's
  * depletion penalty tier (availableQty <= 5 triggers penalty).
@@ -148,44 +145,7 @@ function ErrorState({ message, onRetry }) {
   );
 }
 
-function MissingTokenState() {
-  return (
-    <div
-      className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-card)] p-12 flex flex-col items-center justify-center"
-      style={{ minHeight: '400px' }}
-    >
-      <div className="w-16 h-16 rounded-full bg-[var(--color-accent-glow)] flex items-center justify-center mb-6">
-        <svg className="w-8 h-8 text-[var(--color-accent)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M9 6.75V15m6-6v8.25m.503 3.498 4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 0 0-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0Z" />
-        </svg>
-      </div>
-      <h2 className="text-xl font-semibold text-[var(--color-text-primary)] mb-2">
-        Mapbox Token Required
-      </h2>
-      <p className="text-[var(--color-text-secondary)] text-center max-w-md mb-6">
-        The Control Tower map requires a Mapbox access token.
-        Add your token to the client environment configuration to enable the interactive map.
-      </p>
-      <div className="rounded-lg bg-[var(--color-bg-primary)] border border-[var(--color-border)] p-4 max-w-md w-full">
-        <p className="text-xs font-mono text-[var(--color-text-muted)] mb-1">client/.env</p>
-        <code className="text-sm text-[var(--color-accent)] font-mono">
-          VITE_MAPBOX_TOKEN=pk.your_token_here
-        </code>
-      </div>
-      <p className="text-xs text-[var(--color-text-muted)] mt-4">
-        Get a free token at{' '}
-        <a
-          href="https://mapbox.com"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-[var(--color-accent)] underline hover:text-[var(--color-accent-hover)]"
-        >
-          mapbox.com
-        </a>
-      </p>
-    </div>
-  );
-}
+
 
 // ─── Helpers ────────────────────────────────────────────────
 
@@ -281,9 +241,9 @@ export default function ControlTowerDashboard() {
     fetchWarehouses();
   }, [fetchWarehouses]);
 
-  // Initialize Mapbox map once we have a token and data
+  // Initialize MapLibre map once we have data
   useEffect(() => {
-    if (!MAPBOX_TOKEN || loading || error || warehouses.length === 0) return;
+    if (loading || error || warehouses.length === 0) return;
     if (!mapContainerRef.current) return;
 
     // Don't re-create map if already initialized
@@ -295,21 +255,19 @@ export default function ControlTowerDashboard() {
       return;
     }
 
-    mapboxgl.accessToken = MAPBOX_TOKEN;
-
     // Calculate centroid for initial center
     const avgLat = warehouses.reduce((s, w) => s + w.lat, 0) / warehouses.length;
     const avgLng = warehouses.reduce((s, w) => s + w.lng, 0) / warehouses.length;
 
-    const map = new mapboxgl.Map({
+    const map = new maplibregl.Map({
       container: mapContainerRef.current,
-      style: 'mapbox://styles/mapbox/dark-v11',
+      style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
       center: [avgLng, avgLat],
       zoom: 4.5,
       attributionControl: true,
     });
 
-    map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+    map.addControl(new maplibregl.NavigationControl(), 'top-right');
 
     map.on('load', () => {
       addMarkers(map, warehouses);
@@ -339,14 +297,14 @@ export default function ControlTowerDashboard() {
       el.setAttribute('tabindex', '0');
       el.textContent = lowStock ? '▼' : '✓';
 
-      const popup = new mapboxgl.Popup({
+      const popup = new maplibregl.Popup({
         offset: 20,
         closeButton: true,
         closeOnClick: true,
         maxWidth: '320px',
       }).setHTML(buildPopupHTML(wh));
 
-      const marker = new mapboxgl.Marker({ element: el })
+      const marker = new maplibregl.Marker({ element: el })
         .setLngLat([wh.lng, wh.lat])
         .setPopup(popup)
         .addTo(map);
@@ -354,9 +312,8 @@ export default function ControlTowerDashboard() {
       markersRef.current.push(marker);
     });
 
-    // Fit map bounds to markers
     if (warehouseList.length > 1) {
-      const bounds = new mapboxgl.LngLatBounds();
+      const bounds = new maplibregl.LngLatBounds();
       warehouseList.forEach((wh) => bounds.extend([wh.lng, wh.lat]));
       map.fitBounds(bounds, { padding: 60, maxZoom: 8, duration: 1000 });
     }
@@ -396,11 +353,8 @@ export default function ControlTowerDashboard() {
         </div>
       ) : null}
 
-      {/* Map Area */}
       <div className="mt-6">
-        {!MAPBOX_TOKEN ? (
-          <MissingTokenState />
-        ) : loading ? (
+        {loading ? (
           <SkeletonMap />
         ) : error ? (
           <ErrorState message={error} onRetry={fetchWarehouses} />
