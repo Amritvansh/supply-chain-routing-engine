@@ -49,7 +49,7 @@ export default function AIExplanationWidget({ orderId, autoFetch = false }) {
   // ─── Idle State ─────────────────────────────────────────
   if (state === 'idle') {
     return (
-      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-card)] p-4">
+      <div className="glass-card p-4">
         <div className="flex items-center gap-2 mb-2">
           <div className="w-2 h-2 rounded-full bg-[var(--color-text-muted)]" aria-hidden="true" />
           <h3 className="text-sm font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">
@@ -81,7 +81,7 @@ export default function AIExplanationWidget({ orderId, autoFetch = false }) {
   // ─── Loading State ──────────────────────────────────────
   if (state === 'loading') {
     return (
-      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-card)] p-4" role="status">
+      <div className="glass-card p-4" role="status">
         <div className="flex items-center gap-2 mb-3">
           <div className="w-2 h-2 rounded-full bg-[var(--color-accent)] animate-pulse" aria-hidden="true" />
           <h3 className="text-sm font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">
@@ -105,7 +105,7 @@ export default function AIExplanationWidget({ orderId, autoFetch = false }) {
   // ─── Error State ────────────────────────────────────────
   if (state === 'error') {
     return (
-      <div className="rounded-lg border border-[var(--color-danger)] bg-[var(--color-bg-card)] p-4" role="alert">
+      <div className="glass-card p-4" style={{ borderColor: 'var(--color-danger)' }} role="alert">
         <div className="flex items-center gap-2 mb-2">
           <div className="w-2 h-2 rounded-full bg-[var(--color-danger)]" aria-hidden="true" />
           <h3 className="text-sm font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">
@@ -130,7 +130,7 @@ export default function AIExplanationWidget({ orderId, autoFetch = false }) {
   const isGemini = data?.source === 'gemini';
 
   return (
-    <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-card)] p-4">
+    <div className="glass-card p-4">
       {/* Header with source badge */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">

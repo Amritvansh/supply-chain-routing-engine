@@ -9,10 +9,10 @@ export default function Analytics() {
     <div className="animate-fade-in">
       {/* Page Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-[var(--color-text-primary)] mb-2">
+        <h1 className="page-title mb-2">
           Analytics
         </h1>
-        <p className="text-[var(--color-text-secondary)]">
+        <p className="page-subtitle">
           Routing performance metrics and operational insights
         </p>
       </div>
@@ -27,14 +27,14 @@ export default function Analytics() {
         ].map((chart) => (
           <div
             key={chart.title}
-            className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-card)] p-6"
+            className="glass-card p-6"
           >
-            <h3 className="text-sm font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-4 flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-4 flex items-center gap-2 section-header-accent">
               <span>{chart.icon}</span>
               {chart.title}
             </h3>
             <div
-              className="h-48 rounded-lg bg-[var(--color-bg-primary)] border border-[var(--color-border)] flex items-center justify-center"
+              className="h-48 rounded-xl bg-[var(--color-bg-primary)] border border-[var(--color-border-subtle)] flex items-center justify-center"
             >
               <p className="text-[var(--color-text-muted)] text-sm">
                 Recharts visualization — Week 4

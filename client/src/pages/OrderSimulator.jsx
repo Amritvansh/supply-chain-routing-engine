@@ -34,7 +34,7 @@ const PRESET_CITIES = [
 
 function SectionCard({ children, className = '' }) {
   return (
-    <div className={`rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-card)] p-6 ${className}`}>
+    <div className={`glass-card p-6 ${className}`}>
       {children}
     </div>
   );
@@ -42,7 +42,7 @@ function SectionCard({ children, className = '' }) {
 
 function SectionHeader({ icon, title, subtitle, accentColor = 'var(--color-accent)' }) {
   return (
-    <div className="mb-5">
+    <div className="mb-5 section-header-accent">
       <h2 className="text-lg font-semibold text-[var(--color-text-primary)] flex items-center gap-2">
         <span style={{ color: accentColor }}>{icon}</span>
         {title}
@@ -56,11 +56,11 @@ function SectionHeader({ icon, title, subtitle, accentColor = 'var(--color-accen
 
 function StatBlock({ label, value, unit, accentColor = 'var(--color-accent)' }) {
   return (
-    <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-primary)] p-3 text-center">
-      <p className="text-[10px] text-[var(--color-text-muted)] uppercase tracking-wider mb-1">{label}</p>
-      <p className="text-xl font-bold" style={{ color: accentColor }}>
+    <div className="stat-card text-center">
+      <p className="text-[10px] text-[var(--color-text-muted)] uppercase tracking-wider mb-1 font-semibold">{label}</p>
+      <p className="text-2xl font-extrabold tracking-tight" style={{ color: accentColor }}>
         {value}
-        {unit && <span className="text-xs text-[var(--color-text-muted)] ml-1">{unit}</span>}
+        {unit && <span className="text-xs text-[var(--color-text-muted)] ml-1 font-medium">{unit}</span>}
       </p>
     </div>
   );
@@ -412,11 +412,11 @@ export default function OrderSimulator() {
   return (
     <div className="animate-fade-in">
       {/* Page Header */}
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-[var(--color-text-primary)] mb-1">
+      <div className="mb-8">
+        <h1 className="page-title mb-2">
           Order Simulator
         </h1>
-        <p className="text-[var(--color-text-secondary)]">
+        <p className="page-subtitle">
           Simulate checkout orders and test the hybrid routing engine
         </p>
       </div>
@@ -543,7 +543,7 @@ export default function OrderSimulator() {
             <button
               onClick={handleCheckout}
               disabled={!isFormValid() || checkoutState === 'loading'}
-              className="w-full py-3 rounded-lg bg-[var(--color-accent)] text-[var(--color-bg-primary)] font-semibold text-sm hover:bg-[var(--color-accent-hover)] transition-colors duration-200 disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:ring-offset-2 focus:ring-offset-[var(--color-bg-card)]"
+              className="w-full py-3 btn-primary text-sm"
               id="place-order-btn"
             >
               {checkoutState === 'loading' ? (
@@ -822,7 +822,7 @@ export default function OrderSimulator() {
           <button
             onClick={handleFlashTest}
             disabled={!flashSku || flashState === 'loading'}
-            className="w-full sm:w-auto px-6 py-2.5 rounded-lg border-2 border-[var(--color-warning)] text-[var(--color-warning)] font-semibold text-sm hover:bg-[var(--color-warning)] hover:text-[var(--color-bg-primary)] transition-colors duration-200 disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-[var(--color-warning)] focus:ring-offset-2 focus:ring-offset-[var(--color-bg-card)]"
+            className="w-full sm:w-auto px-6 py-2.5 btn-outline-warning text-sm"
             id="flash-test-btn"
           >
             {flashState === 'loading' ? (

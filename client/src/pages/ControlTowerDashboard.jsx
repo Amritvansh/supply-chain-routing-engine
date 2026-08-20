@@ -35,18 +35,16 @@ const ROUTE_COLORS = [
 
 function StatCard({ icon, label, value, accentColor }) {
   return (
-    <div
-      className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-card)] p-4 flex items-center gap-3 hover:border-[var(--color-accent)] transition-colors duration-200"
-    >
+    <div className="stat-card flex items-center gap-3">
       <div
-        className="w-10 h-10 rounded-lg flex items-center justify-center text-lg shrink-0"
-        style={{ background: `${accentColor}20`, color: accentColor }}
+        className="w-11 h-11 rounded-xl flex items-center justify-center text-lg shrink-0"
+        style={{ background: `${accentColor}15`, color: accentColor }}
       >
         {icon}
       </div>
       <div className="min-w-0">
-        <p className="text-xs text-[var(--color-text-muted)] truncate">{label}</p>
-        <p className="text-xl font-bold text-[var(--color-text-primary)]">{value}</p>
+        <p className="text-xs text-[var(--color-text-muted)] truncate font-medium">{label}</p>
+        <p className="text-2xl font-extrabold text-[var(--color-text-primary)] tracking-tight">{value}</p>
       </div>
     </div>
   );
@@ -55,7 +53,7 @@ function StatCard({ icon, label, value, accentColor }) {
 function MapLegend() {
   return (
     <div
-      className="absolute bottom-6 left-4 z-10 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-card)] p-3 shadow-lg"
+      className="absolute bottom-6 left-4 z-10 glass-card p-3"
       role="region"
       aria-label="Map legend"
     >
@@ -521,11 +519,11 @@ export default function ControlTowerDashboard() {
   return (
     <div className="animate-fade-in">
       {/* Page Header */}
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-[var(--color-text-primary)] mb-1">
+      <div className="mb-8">
+        <h1 className="page-title mb-2">
           Control Tower
         </h1>
-        <p className="text-[var(--color-text-secondary)]">
+        <p className="page-subtitle">
           Real-time warehouse and shipment monitoring dashboard
         </p>
       </div>
@@ -569,7 +567,7 @@ export default function ControlTowerDashboard() {
             </button>
           </div>
         ) : (
-          <div className="relative rounded-xl border border-[var(--color-border)] overflow-hidden" style={{ minHeight: '460px' }}>
+          <div className="relative glass-card overflow-hidden" style={{ minHeight: '460px' }}>
             <div ref={mapContainerRef} className="w-full" style={{ height: '460px' }} />
             <MapLegend />
           </div>
