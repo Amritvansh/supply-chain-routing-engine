@@ -968,29 +968,26 @@ describe('GET /api/v1/dashboard/map-data', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════════
-// §6 — STUB ENDPOINT TESTS (Week 3 — verify 501)
-// ═══════════════════════════════════════════════════════════════
-
-describe('Week 3 Stub Endpoints', () => {
-  test('POST /api/v1/orders/checkout returns 501', async () => {
+describe('Week 3 Implemented Endpoints — Validation Checks', () => {
+  test('POST /api/v1/orders/checkout returns 400 without Idempotency-Key', async () => {
     const res = await request(app)
       .post('/api/v1/orders/checkout')
-      .send({});
+      .send({ customerLat: 28.6, customerLng: 77.2, items: [{ sku: 'X', qty: 1 }] });
 
-    expect(res.status).toBe(501);
-    expect(res.body.error.code).toBe('NOT_IMPLEMENTED');
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('MISSING_IDEMPOTENCY_KEY');
   });
 
-  test('POST /api/v1/orders/flash-test returns 501', async () => {
+  test('POST /api/v1/orders/flash-test returns 400 with empty body', async () => {
     const res = await request(app)
       .post('/api/v1/orders/flash-test')
       .send({});
 
-    expect(res.status).toBe(501);
-    expect(res.body.error.code).toBe('NOT_IMPLEMENTED');
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('INVALID_REQUEST');
   });
 });
+
 
 // ═══════════════════════════════════════════════════════════════
 // §7 — HEALTH CHECK TESTS

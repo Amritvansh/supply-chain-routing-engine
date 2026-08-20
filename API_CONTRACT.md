@@ -200,9 +200,132 @@ Returns aggregated data for the Control Tower Map.
 
 ---
 
-## 6. Future Endpoints (Week 3 Stubs)
+## 6. Checkout (Synchronous — No AI)
 
-The following endpoints exist as stubs returning `501 NOT_IMPLEMENTED` and are explicitly excluded from Week 1–2 completion:
+### POST `/api/v1/orders/checkout`
+Deterministic routing + ACID checkout. **Never calls Gemini.** The frontend separately calls `/explain` after receiving the order.
 
-- `POST /api/v1/orders/checkout` (Will handle synchronous checkout)
-- `POST /api/v1/orders/flash-test` (Will trigger server-side concurrency tests)
+**Required Headers**
+- `Idempotency-Key`: Client-generated unique key (returns 400 if missing)
+
+**Request Body**
+```json
+{
+  "customerLat": 19.076,
+  "customerLng": 72.877,
+  "items": [
+    { "sku": "SKU-001", "qty": 2 }
+  ]
+}
+```
+
+**Response (201 Created)**
+```json
+{
+  "order": {
+    "id": "uuid",
+    "customer_lat": "19.076",
+    "customer_lng": "72.877",
+    "status": "ROUTED",
+    "idempotency_key": "idem-123",
+    "created_at": "2026-08-20T00:00:00Z"
+  },
+  "items": [
+    { "id": "uuid", "order_id": "uuid", "sku": "SKU-001", "qty": 2 }
+  ],
+  "shipments": [
+    {
+      "id": "uuid",
+      "order_id": "uuid",
+      "warehouse_id": "uuid",
+      "box_size": "MEDIUM",
+      "total_cost": "10.60",
+      "distance_km": "15.20",
+      "created_at": "2026-08-20T00:00:01Z"
+    }
+  ],
+  "costBreakdown": {
+    "distanceCost": 7.6,
+    "packagingCost": 3,
+    "depletionPenalty": 0,
+    "totalCost": 10.6
+  },
+  "alternatives": [
+    {
+      "warehouseId": "uuid",
+      "name": "Mumbai Hub",
+      "distanceKm": 120,
+      "penalty": 10,
+      "totalCost": 73,
+      "rejectionReason": null
+    }
+  ],
+  "packing": {
+    "status": "FIT",
+    "boxSize": "MEDIUM",
+    "items": [...],
+    "totalVolumeCm3": 2000,
+    "totalWeightKg": 1.0
+  }
+}
+```
+
+**Response (200 OK) — Idempotency Replay**
+```json
+{
+  "order": { ... },
+  "items": [ ... ],
+  "shipments": [ ... ],
+  "replay": true
+}
+```
+
+**Error Responses**
+| Status | Code | Condition |
+|--------|------|-----------|
+| 400 | `MISSING_IDEMPOTENCY_KEY` | No `Idempotency-Key` header |
+| 400 | `INVALID_REQUEST` | Missing or invalid body fields |
+| 400 | `UNKNOWN_SKU` | SKU does not exist in the database |
+| 409 | `INSUFFICIENT_STOCK` | Warehouse lacks inventory |
+| 409 | `NO_ELIGIBLE_WAREHOUSE` | No warehouse can fulfill the order |
+| 429 | `LOCK_UNAVAILABLE` | SKU is locked by another checkout |
+| 500 | `TRANSACTION_FAILED` | Database transaction error |
+
+---
+
+## 7. Flash-Sale Stress Test
+
+### POST `/api/v1/orders/flash-test`
+Server-side flash-sale simulation. Fires N concurrent checkout attempts through the REAL checkout path and returns aggregated metrics.
+
+**Request Body**
+```json
+{
+  "sku": "SKU-001",
+  "qty": 1,
+  "concurrency": 10
+}
+```
+
+**Constraints**
+- `concurrency` is capped at **50** to prevent unbounded load.
+- `qty` must be a positive integer.
+- `sku` must exist in the database.
+
+**Response (200 OK)**
+```json
+{
+  "successCount": 5,
+  "rateLimited429Count": 3,
+  "conflict409Count": 2,
+  "avgLatencyMs": 45.67,
+  "p95LatencyMs": 82.31
+}
+```
+
+**Error Responses**
+| Status | Code | Condition |
+|--------|------|-----------|
+| 400 | `INVALID_REQUEST` | Missing or invalid body fields |
+| 400 | `CONCURRENCY_LIMIT` | `concurrency` exceeds 50 |
+| 400 | `UNKNOWN_SKU` | SKU does not exist |
