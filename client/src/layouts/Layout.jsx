@@ -1,12 +1,12 @@
 /**
- * Layout — Premium sidebar layout with navigation
+ * Layout — Collapsible sidebar drawer + full-width main content
  *
- * Wraps all pages with a fixed sidebar and a scrollable main content area.
- * Uses React Router's NavLink for active route indication.
- *
- * Responsive behavior:
- *   - Desktop (≥ 768px): Fixed sidebar always visible
- *   - Mobile (< 768px): Sidebar collapses into a hamburger overlay
+ * Architecture:
+ *   - Main content ALWAYS takes full viewport width (no margin offsets)
+ *   - Sidebar is an overlay drawer, toggled by a fixed menu button
+ *   - Click menu → drawer slides in from left with backdrop
+ *   - Click backdrop / nav item / escape → drawer closes
+ *   - No overlap, no cutoff, no broken margin calculations
  */
 import { useState, useEffect } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
@@ -45,36 +45,36 @@ const navItems = [
 ];
 
 export default function Layout() {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const location = useLocation();
 
-  // Close sidebar on route change (mobile)
+  // Close drawer on route change
   useEffect(() => {
-    setSidebarOpen(false);
+    setDrawerOpen(false);
   }, [location.pathname]);
 
-  // Close sidebar on escape key
+  // Close drawer on escape key
   useEffect(() => {
     function handleKeyDown(e) {
-      if (e.key === 'Escape' && sidebarOpen) {
-        setSidebarOpen(false);
+      if (e.key === 'Escape' && drawerOpen) {
+        setDrawerOpen(false);
       }
     }
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [sidebarOpen]);
+  }, [drawerOpen]);
 
   return (
-    <div className={`flex min-h-screen ${sidebarOpen ? 'sidebar-mobile-open' : ''}`}>
-      {/* ─── Mobile Hamburger ──────────────────────────── */}
+    <div style={{ minHeight: '100vh' }}>
+      {/* ─── Fixed Menu Toggle Button ──────────────────── */}
       <button
-        onClick={() => setSidebarOpen((prev) => !prev)}
-        className="fixed top-4 left-4 z-50 md:hidden w-10 h-10 rounded-lg bg-[var(--color-bg-card-solid)] border border-[var(--color-border)] flex items-center justify-center text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-accent)] transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
-        aria-label={sidebarOpen ? 'Close navigation menu' : 'Open navigation menu'}
-        aria-expanded={sidebarOpen}
-        style={{ backdropFilter: 'blur(12px)' }}
+        onClick={() => setDrawerOpen((prev) => !prev)}
+        className="menu-toggle-btn"
+        aria-label={drawerOpen ? 'Close navigation' : 'Open navigation'}
+        aria-expanded={drawerOpen}
+        id="menu-toggle"
       >
-        {sidebarOpen ? (
+        {drawerOpen ? (
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
           </svg>
@@ -85,89 +85,88 @@ export default function Layout() {
         )}
       </button>
 
-      {/* ─── Mobile Backdrop ───────────────────────────── */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 z-30 bg-black/60 md:hidden"
-          style={{ backdropFilter: 'blur(4px)' }}
-          onClick={() => setSidebarOpen(false)}
-          aria-hidden="true"
-        />
-      )}
+      {/* ─── Backdrop (visible when drawer is open) ──── */}
+      <div
+        className={`drawer-backdrop ${drawerOpen ? 'drawer-backdrop--visible' : ''}`}
+        onClick={() => setDrawerOpen(false)}
+        aria-hidden="true"
+      />
 
-      {/* ─── Sidebar ──────────────────────────────────── */}
+      {/* ─── Sidebar Drawer ────────────────────────────── */}
       <aside
-        className={`fixed top-0 left-0 h-screen flex flex-col border-r border-[var(--color-border)] bg-[var(--color-bg-sidebar)] z-40 transition-transform duration-300 ease-in-out w-[260px] ${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
-        }`}
+        className={`sidebar-drawer ${drawerOpen ? 'sidebar-drawer--open' : ''}`}
       >
         {/* Logo / Brand */}
-        <div className="px-5 py-6 border-b border-[var(--color-border)]">
-          <div className="flex items-center gap-3">
+        <div style={{ padding: '24px 20px', borderBottom: '1px solid var(--color-border)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div
-              className="w-10 h-10 rounded-xl flex items-center justify-center shadow-lg"
-              style={{ background: 'var(--color-accent-gradient)' }}
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 12,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'var(--color-accent-gradient)',
+                boxShadow: '0 4px 12px rgba(99,102,241,0.3)',
+              }}
             >
               <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 18.75a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 0 1-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m3 0h1.125c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H18.75m-7.5-2.625h6.375c.621 0 1.125.504 1.125 1.125v1.5m0 0h.75m-6-3H6.375a1.125 1.125 0 0 0-1.125 1.125v3.659M18.75 12.75h.008v.008h-.008v-.008Zm-.375-3h.008v.008h-.008V9.75Z" />
               </svg>
             </div>
             <div>
-              <h1 className="text-sm font-bold text-[var(--color-text-primary)] leading-tight tracking-tight">
+              <h1 style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-text-primary)', lineHeight: 1.3, letterSpacing: '-0.01em' }}>
                 Supply Chain
               </h1>
-              <p className="text-xs text-[var(--color-accent)] font-medium">Routing Engine</p>
+              <p style={{ fontSize: 12, color: 'var(--color-accent)', fontWeight: 500 }}>Routing Engine</p>
             </div>
           </div>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 px-3 py-4 space-y-1" aria-label="Main navigation">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === '/'}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition-all duration-200 group ${
-                  isActive
-                    ? 'bg-[var(--color-accent-glow)] text-[var(--color-accent)] shadow-sm border border-[rgba(99,102,241,0.15)]'
-                    : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text-primary)] border border-transparent'
-                }`
-              }
-            >
-              <span className="shrink-0 transition-transform duration-200 group-hover:scale-110">
-                {item.icon}
-              </span>
-              <div className="min-w-0">
-                <div className="truncate">{item.label}</div>
-                <div className="text-[10px] text-[var(--color-text-muted)] truncate font-normal">
-                  {item.description}
+        <nav style={{ flex: 1, padding: '16px 12px' }} aria-label="Main navigation">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {navItems.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.to === '/'}
+                className={({ isActive }) =>
+                  `nav-item ${isActive ? 'nav-item--active' : ''}`
+                }
+              >
+                <span className="nav-item-icon">
+                  {item.icon}
+                </span>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontWeight: 500, fontSize: 14 }}>{item.label}</div>
+                  <div style={{ fontSize: 10, color: 'var(--color-text-muted)', fontWeight: 400 }}>
+                    {item.description}
+                  </div>
                 </div>
-              </div>
-            </NavLink>
-          ))}
+              </NavLink>
+            ))}
+          </div>
         </nav>
 
         {/* Footer */}
-        <div className="px-5 py-4 border-t border-[var(--color-border)]">
-          <div className="flex items-center gap-2 mb-1">
-            <div className="w-1.5 h-1.5 rounded-full bg-[var(--color-success)] animate-pulse" />
-            <p className="text-[10px] text-[var(--color-text-muted)] font-semibold uppercase tracking-wider">
+        <div style={{ padding: '16px 20px', borderTop: '1px solid var(--color-border)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+            <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-success)', boxShadow: '0 0 8px rgba(52,211,153,0.5)' }} />
+            <p style={{ fontSize: 10, color: 'var(--color-text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               Hybrid Architecture
             </p>
           </div>
-          <p className="text-[10px] text-[var(--color-text-muted)]">
+          <p style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>
             Deterministic Core + Async AI
           </p>
         </div>
       </aside>
 
-      {/* ─── Main Content ─────────────────────────────── */}
-      <main
-        className="flex-1 min-h-screen overflow-auto pt-16 md:pt-0 md:ml-[260px]"
-      >
-        <div className="p-6 md:p-8 max-w-[1400px] mx-auto">
+      {/* ─── Main Content (ALWAYS full width) ──────────── */}
+      <main style={{ minHeight: '100vh', paddingTop: 0 }}>
+        <div style={{ padding: '32px', maxWidth: 1400, margin: '0 auto' }}>
           <Outlet />
         </div>
       </main>
