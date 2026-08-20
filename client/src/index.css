@@ -233,6 +233,34 @@ body {
   box-shadow: 0 0 16px rgba(251, 191, 36, 0.5);
 }
 
+/* ─── Customer Destination Markers ──────────────────────── */
+.customer-marker {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: rgba(244, 114, 182, 0.5);
+  border: 2px solid #f472b6;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 0 8px rgba(244, 114, 182, 0.4);
+}
+
+.customer-marker:hover {
+  transform: scale(1.4);
+  box-shadow: 0 0 16px rgba(244, 114, 182, 0.6);
+}
+
+/* ─── Form Inputs (dark theme consistency) ───────────────── */
+select option {
+  background: var(--color-bg-card);
+  color: var(--color-text-primary);
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  opacity: 0.5;
+}
+
 /* ─── Responsive: Mobile sidebar ─────────────────────────── */
 @media (max-width: 767px) {
   :root {
