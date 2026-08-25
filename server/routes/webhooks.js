@@ -13,11 +13,15 @@
  *
  * Valid events are logged to the webhook_events table.
  * This is an internal simulator — no external logistics provider involved.
+ *
+ * Week 4: Uses Zod validation middleware and Pino structured logging.
  */
 'use strict';
 
 const { Router } = require('express');
 const pool = require('../db/pool');
+const logger = require('../services/logger');
+const { validateWebhookBody } = require('../middleware/validators');
 
 const router = Router();
 
@@ -34,50 +38,25 @@ const VALID_TRANSITIONS = {
 
 const VALID_STATUSES = Object.keys(VALID_TRANSITIONS);
 
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 /**
  * POST /api/v1/webhooks/logistics
  *
- * Request body: { shipment_id: UUID, status: string }
+ * Middleware chain:
+ *   1. validateWebhookBody — Zod schema validation (400 if invalid)
+ *   2. handler — status transition validation + event logging
  *
  * Response:
  *   200 — Transition accepted, event logged
- *   400 — Missing/invalid fields
+ *   400 — Zod validation failure
  *   404 — Shipment not found
  *   409 — Invalid status transition
  */
-router.post('/logistics', async (req, res, next) => {
+router.post('/logistics', validateWebhookBody, async (req, res, next) => {
   try {
     const { shipment_id, status } = req.body;
+    const log = req.log || logger;
 
-    // ─── Input Validation ────────────────────────────────────
-    if (!shipment_id || !status) {
-      return res.status(400).json({
-        error: {
-          code: 'MISSING_FIELDS',
-          message: 'Both "shipment_id" and "status" are required.',
-        },
-      });
-    }
-
-    if (!UUID_REGEX.test(shipment_id)) {
-      return res.status(400).json({
-        error: {
-          code: 'INVALID_SHIPMENT_ID',
-          message: `"${shipment_id}" is not a valid UUID.`,
-        },
-      });
-    }
-
-    if (!VALID_STATUSES.includes(status)) {
-      return res.status(400).json({
-        error: {
-          code: 'INVALID_STATUS',
-          message: `"${status}" is not a valid status. Must be one of: ${VALID_STATUSES.join(', ')}.`,
-        },
-      });
-    }
+    log.info({ shipmentId: shipment_id, status }, 'Webhook: status update received');
 
     // ─── Verify Shipment Exists ──────────────────────────────
     const shipmentResult = await pool.query(
@@ -95,7 +74,6 @@ router.post('/logistics', async (req, res, next) => {
     }
 
     // ─── Check Current Status ────────────────────────────────
-    // Get the most recent status for this shipment
     const lastEventResult = await pool.query(
       `SELECT status FROM webhook_events
        WHERE shipment_id = $1
@@ -112,7 +90,6 @@ router.post('/logistics', async (req, res, next) => {
     const requiredPreviousStatus = VALID_TRANSITIONS[status];
 
     if (currentStatus !== requiredPreviousStatus) {
-      // Determine the type of violation for a clear error message
       let reason;
       if (currentStatus === null) {
         reason = `Shipment has no prior status. First event must be PICKED_UP, not "${status}".`;
@@ -125,6 +102,8 @@ router.post('/logistics', async (req, res, next) => {
       } else {
         reason = `Cannot skip from "${currentStatus}" to "${status}". Expected "${VALID_STATUSES[VALID_STATUSES.indexOf(currentStatus) + 1]}".`;
       }
+
+      log.warn({ shipmentId: shipment_id, currentStatus, attemptedStatus: status }, 'Webhook: invalid transition');
 
       return res.status(409).json({
         error: {
@@ -145,6 +124,8 @@ router.post('/logistics', async (req, res, next) => {
     );
 
     const event = insertResult.rows[0];
+
+    log.info({ eventId: event.id, shipmentId: shipment_id, status }, 'Webhook: transition accepted');
 
     res.status(200).json({
       event: {

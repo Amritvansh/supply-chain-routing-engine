@@ -1,9 +1,10 @@
-# Frozen API Contract v1 (Week 1–2)
+# API Contract v2 — Supply Chain Routing Engine
 
-**Status:** FROZEN
-**Version:** 1.0.0
+**Status:** FINAL
+**Version:** 2.0.0
+**Last Updated:** Week 4 — API Hardening
 
-This document defines the frozen API contract for the Distributed Supply Chain Routing & Inventory Balancing Engine at the end of Week 1–2. All backend implementations and frontend integrations MUST adhere to this contract.
+This document is the **definitive source of truth** for all `/api/v1` endpoints. All backend implementations and frontend integrations MUST adhere to this contract.
 
 ---
 
@@ -11,12 +12,26 @@ This document defines the frozen API contract for the Distributed Supply Chain R
 
 - **Base URL:** `/api/v1`
 - **Content-Type:** `application/json` (for all POST requests)
-- **Error Format:** All errors follow a standard structure:
+- **Request ID:** Every response includes an `X-Request-Id` header for log correlation. Clients may optionally send their own `X-Request-Id` header; if provided, the server echoes it back.
+- **Error Format:** All errors follow a standard envelope:
   ```json
   {
     "error": {
       "code": "ERROR_CODE",
       "message": "Human readable error message"
+    }
+  }
+  ```
+- **Validation Errors:** Zod-validated endpoints return 400 with additional `details`:
+  ```json
+  {
+    "error": {
+      "code": "VALIDATION_ERROR",
+      "message": "customerLat: Latitude must be between -90 and 90; items: items must be a non-empty array",
+      "details": [
+        { "field": "customerLat", "message": "Latitude must be between -90 and 90" },
+        { "field": "items", "message": "items must be a non-empty array" }
+      ]
     }
   }
   ```
@@ -26,23 +41,35 @@ This document defines the frozen API contract for the Distributed Supply Chain R
 ## 1. System Health
 
 ### GET `/api/v1/health`
+
 Checks connectivity to backend databases (PostgreSQL and Redis).
+
+**Headers:** None required.
 
 **Response (200 OK)**
 ```json
 {
-  "status": "ok",      // or "degraded"
-  "db": true,          // PostgreSQL status
-  "redis": true        // Redis status
+  "status": "ok",
+  "db": true,
+  "redis": true
 }
 ```
+
+| Field | Type | Values |
+|-------|------|--------|
+| `status` | string | `"ok"` (all healthy) or `"degraded"` (one or more down) |
+| `db` | boolean | PostgreSQL connectivity |
+| `redis` | boolean | Redis connectivity |
 
 ---
 
 ## 2. Warehouses
 
 ### GET `/api/v1/warehouses`
-Fetches all active warehouses and their grouped inventory.
+
+Returns all warehouses with per-SKU inventory breakdown.
+
+**Headers:** None required.
 
 **Response (200 OK)**
 ```json
@@ -69,10 +96,16 @@ Fetches all active warehouses and their grouped inventory.
 
 ---
 
-## 3. Orders & Routing
+## 3. Orders
 
 ### GET `/api/v1/orders/:id`
-Fetches a specific order with its items and shipments.
+
+Returns a specific order with its items and shipments.
+
+**Path Parameters:**
+| Param | Type | Validation |
+|-------|------|------------|
+| `id` | UUID | Zod-validated, 400 if invalid |
 
 **Response (200 OK)**
 ```json
@@ -86,12 +119,7 @@ Fetches a specific order with its items and shipments.
     "createdAt": "2026-08-18T00:00:00Z"
   },
   "items": [
-    {
-      "id": "uuid",
-      "sku": "SKU-001",
-      "skuName": "Widget A",
-      "qty": 2
-    }
+    { "id": "uuid", "sku": "SKU-001", "skuName": "Widget A", "qty": 2 }
   ],
   "shipments": [
     {
@@ -107,108 +135,45 @@ Fetches a specific order with its items and shipments.
 }
 ```
 
-### GET `/api/v1/orders/:id/explain`
-Fetches the asynchronous AI explanation for routing decisions.
-
-**Response (200 OK)**
-```json
-{
-  "explanation": "Markdown text explaining the routing decision...",
-  "modelUsed": "gemini-2.0-flash", // or "n/a" for fallback
-  "source": "gemini",                // or "fallback_template"
-  "latencyMs": 450,
-  "generatedAt": "2026-08-18T00:00:00Z",
-  "cached": true
-}
-```
+**Error Responses:**
+| Status | Code | Condition |
+|--------|------|-----------|
+| 400 | `VALIDATION_ERROR` | Invalid UUID format |
+| 404 | `ORDER_NOT_FOUND` | Order does not exist |
 
 ---
 
-## 4. Webhooks
-
-### POST `/api/v1/webhooks/logistics`
-Receives simulated logistics status updates. Must follow sequence: `PICKED_UP → IN_TRANSIT → DELIVERED`.
-
-**Request Body**
-```json
-{
-  "shipment_id": "uuid",
-  "status": "PICKED_UP"
-}
-```
-
-**Response (200 OK)**
-```json
-{
-  "event": {
-    "id": "uuid",
-    "shipmentId": "uuid",
-    "status": "PICKED_UP",
-    "receivedAt": "2026-08-18T00:00:00Z"
-  },
-  "message": "Webhook received successfully"
-}
-```
-
----
-
-## 5. Dashboard
-
-### GET `/api/v1/dashboard/map-data`
-Returns aggregated data for the Control Tower Map.
-
-**Query Parameters**
-- `limit` (optional): Max number of recent order routes to return (default 50, max 200).
-
-**Response (200 OK)**
-```json
-{
-  "warehouses": [
-    {
-      "id": "uuid",
-      "name": "Delhi Hub",
-      "lat": 28.6139,
-      "lng": 77.209,
-      "active": true,
-      "totalStock": 150,
-      "lowStockSkus": 0,
-      "healthStatus": "healthy" // or "low_stock"
-    }
-  ],
-  "routes": [
-    {
-      "orderId": "uuid",
-      "status": "ROUTED",
-      "createdAt": "2026-08-18T00:00:00Z",
-      "customer": { "lat": 28.5, "lng": 77.1 },
-      "shipments": [
-        {
-          "shipmentId": "uuid",
-          "warehouseId": "uuid",
-          "warehouseName": "Delhi Hub",
-          "warehouseLat": 28.6139,
-          "warehouseLng": 77.209,
-          "distanceKm": 15.20,
-          "boxSize": "MEDIUM",
-          "totalCost": 10.60
-        }
-      ]
-    }
-  ]
-}
-```
-
----
-
-## 6. Checkout (Synchronous — No AI)
+## 4. Checkout (Synchronous — No AI)
 
 ### POST `/api/v1/orders/checkout`
+
 Deterministic routing + ACID checkout. **Never calls Gemini.** The frontend separately calls `/explain` after receiving the order.
 
-**Required Headers**
-- `Idempotency-Key`: Client-generated unique key (returns 400 if missing)
+**Rate Limiting:**
+| Config | Value |
+|--------|-------|
+| Window | 60 seconds |
+| Max requests | 30 per IP per window |
+| Headers | `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset`, `Retry-After` |
 
-**Request Body**
+When rate limit is exceeded:
+```json
+// 429 Too Many Requests
+{
+  "error": {
+    "code": "RATE_LIMIT_EXCEEDED",
+    "message": "Too many checkout requests. Limit: 30 per 60s window. Please retry after the Retry-After period."
+  }
+}
+```
+
+**Required Headers:**
+| Header | Type | Required |
+|--------|------|----------|
+| `Idempotency-Key` | string | Yes — 400 if missing |
+| `Content-Type` | `application/json` | Yes |
+
+**Request Body (Zod-validated):**
 ```json
 {
   "customerLat": 19.076,
@@ -218,6 +183,14 @@ Deterministic routing + ACID checkout. **Never calls Gemini.** The frontend sepa
   ]
 }
 ```
+
+| Field | Type | Constraints |
+|-------|------|-------------|
+| `customerLat` | number | Finite, -90 to 90 |
+| `customerLng` | number | Finite, -180 to 180 |
+| `items` | array | Non-empty |
+| `items[].sku` | string | Non-empty |
+| `items[].qty` | integer | ≥ 1 |
 
 **Response (201 Created)**
 ```json
@@ -263,7 +236,7 @@ Deterministic routing + ACID checkout. **Never calls Gemini.** The frontend sepa
   "packing": {
     "status": "FIT",
     "boxSize": "MEDIUM",
-    "items": [...],
+    "items": ["..."],
     "totalVolumeCm3": 2000,
     "totalWeightKg": 1.0
   }
@@ -273,32 +246,206 @@ Deterministic routing + ACID checkout. **Never calls Gemini.** The frontend sepa
 **Response (200 OK) — Idempotency Replay**
 ```json
 {
-  "order": { ... },
-  "items": [ ... ],
-  "shipments": [ ... ],
+  "order": { "..." },
+  "items": ["..."],
+  "shipments": ["..."],
   "replay": true
 }
 ```
 
-**Error Responses**
+**Error Responses:**
 | Status | Code | Condition |
 |--------|------|-----------|
 | 400 | `MISSING_IDEMPOTENCY_KEY` | No `Idempotency-Key` header |
-| 400 | `INVALID_REQUEST` | Missing or invalid body fields |
+| 400 | `VALIDATION_ERROR` | Zod schema validation failure |
 | 400 | `UNKNOWN_SKU` | SKU does not exist in the database |
 | 409 | `INSUFFICIENT_STOCK` | Warehouse lacks inventory |
 | 409 | `NO_ELIGIBLE_WAREHOUSE` | No warehouse can fulfill the order |
+| 409 | `NO_WAREHOUSES` | No active warehouses available |
 | 429 | `LOCK_UNAVAILABLE` | SKU is locked by another checkout |
+| 429 | `RATE_LIMIT_EXCEEDED` | Too many requests in window |
 | 500 | `TRANSACTION_FAILED` | Database transaction error |
+| 500 | `LOCK_SERVICE_ERROR` | Redis unavailable |
 
 ---
 
-## 7. Flash-Sale Stress Test
+## 5. AI Explanation (Asynchronous)
+
+### GET `/api/v1/orders/:id/explain`
+
+Returns AI-generated or deterministic explanation(s) of routing decisions. Supports both single and multi-shipment orders.
+
+**Path Parameters:**
+| Param | Type | Validation |
+|-------|------|------------|
+| `id` | UUID | Zod-validated, 400 if invalid |
+
+**Single Shipment Response (200 OK):**
+```json
+{
+  "explanation": "Plain-language text explaining the routing decision...",
+  "modelUsed": "gemini-2.0-flash",
+  "source": "gemini",
+  "latencyMs": 450,
+  "generatedAt": "2026-08-18T00:00:00Z",
+  "cached": true
+}
+```
+
+**Multi-Shipment Response (200 OK):**
+```json
+{
+  "explanations": [
+    {
+      "shipmentIndex": 0,
+      "shipmentId": "uuid",
+      "warehouseName": "Delhi Hub",
+      "explanation": "Explanation for shipment group 0...",
+      "source": "gemini"
+    },
+    {
+      "shipmentIndex": 1,
+      "shipmentId": "uuid",
+      "warehouseName": "Mumbai Hub",
+      "explanation": "Explanation for shipment group 1...",
+      "source": "fallback_template"
+    }
+  ],
+  "multiShipment": true,
+  "modelUsed": "gemini-2.0-flash",
+  "source": "gemini",
+  "latencyMs": 1200,
+  "generatedAt": "2026-08-18T00:00:00Z",
+  "cached": false
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `source` | string | `"gemini"` if all groups used AI, `"fallback_template"` if any fell back |
+| `modelUsed` | string | Gemini model name or `"n/a"` for fallback |
+| `cached` | boolean | `true` if returned from `ai_explanations` cache |
+| `multiShipment` | boolean | Present and `true` for split-shipment orders |
+
+**Error Responses:**
+| Status | Code | Condition |
+|--------|------|-----------|
+| 400 | `VALIDATION_ERROR` | Invalid UUID format |
+| 404 | `ORDER_NOT_FOUND` | Order does not exist |
+| 404 | `NO_SHIPMENTS` | Order has no shipments yet |
+
+**AI Resilience:**
+- Gemini calls have a 3-second hard timeout
+- Up to 2 retries with exponential backoff (500ms, 1000ms)
+- Circuit breaker trips after 5 consecutive failures → fallback for 60 seconds
+- Fallback always returns 200 with `source: "fallback_template"`
+
+---
+
+## 6. Webhooks
+
+### POST `/api/v1/webhooks/logistics`
+
+Receives simulated logistics status updates. Must follow sequence: `PICKED_UP → IN_TRANSIT → DELIVERED`.
+
+**Request Body (Zod-validated):**
+```json
+{
+  "shipment_id": "uuid",
+  "status": "PICKED_UP"
+}
+```
+
+| Field | Type | Constraints |
+|-------|------|-------------|
+| `shipment_id` | UUID string | Valid UUID |
+| `status` | enum | `PICKED_UP`, `IN_TRANSIT`, `DELIVERED` |
+
+**Response (200 OK)**
+```json
+{
+  "event": {
+    "id": "uuid",
+    "shipmentId": "uuid",
+    "status": "PICKED_UP",
+    "receivedAt": "2026-08-18T00:00:00Z"
+  },
+  "message": "Status transition to \"PICKED_UP\" accepted."
+}
+```
+
+**Error Responses:**
+| Status | Code | Condition |
+|--------|------|-----------|
+| 400 | `VALIDATION_ERROR` | Zod validation failure |
+| 404 | `SHIPMENT_NOT_FOUND` | Shipment does not exist |
+| 409 | `INVALID_TRANSITION` | Illegal status progression |
+
+---
+
+## 7. Dashboard
+
+### GET `/api/v1/dashboard/map-data`
+
+Returns aggregated warehouse and recent order route data for the Control Tower map.
+
+**Query Parameters (Zod-validated):**
+| Param | Type | Default | Constraints |
+|-------|------|---------|-------------|
+| `limit` | integer | 50 | 1–200 |
+
+**Response (200 OK)**
+```json
+{
+  "warehouses": [
+    {
+      "id": "uuid",
+      "name": "Delhi Hub",
+      "lat": 28.6139,
+      "lng": 77.209,
+      "active": true,
+      "totalStock": 150,
+      "lowStockSkus": 0,
+      "healthStatus": "healthy"
+    }
+  ],
+  "routes": [
+    {
+      "orderId": "uuid",
+      "status": "ROUTED",
+      "createdAt": "2026-08-18T00:00:00Z",
+      "customer": { "lat": 28.5, "lng": 77.1 },
+      "shipments": [
+        {
+          "shipmentId": "uuid",
+          "warehouseId": "uuid",
+          "warehouseName": "Delhi Hub",
+          "warehouseLat": 28.6139,
+          "warehouseLng": 77.209,
+          "distanceKm": 15.20,
+          "boxSize": "MEDIUM",
+          "totalCost": 10.60
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Error Responses:**
+| Status | Code | Condition |
+|--------|------|-----------|
+| 400 | `VALIDATION_ERROR` | Invalid `limit` query param |
+
+---
+
+## 8. Flash-Sale Stress Test
 
 ### POST `/api/v1/orders/flash-test`
+
 Server-side flash-sale simulation. Fires N concurrent checkout attempts through the REAL checkout path and returns aggregated metrics.
 
-**Request Body**
+**Request Body (Zod-validated):**
 ```json
 {
   "sku": "SKU-001",
@@ -307,10 +454,11 @@ Server-side flash-sale simulation. Fires N concurrent checkout attempts through 
 }
 ```
 
-**Constraints**
-- `concurrency` is capped at **50** to prevent unbounded load.
-- `qty` must be a positive integer.
-- `sku` must exist in the database.
+| Field | Type | Constraints |
+|-------|------|-------------|
+| `sku` | string | Non-empty, must exist in DB |
+| `qty` | integer | ≥ 1 |
+| `concurrency` | integer | 1–50 |
 
 **Response (200 OK)**
 ```json
@@ -323,9 +471,25 @@ Server-side flash-sale simulation. Fires N concurrent checkout attempts through 
 }
 ```
 
-**Error Responses**
+**Error Responses:**
 | Status | Code | Condition |
 |--------|------|-----------|
-| 400 | `INVALID_REQUEST` | Missing or invalid body fields |
-| 400 | `CONCURRENCY_LIMIT` | `concurrency` exceeds 50 |
+| 400 | `VALIDATION_ERROR` | Zod validation failure |
 | 400 | `UNKNOWN_SKU` | SKU does not exist |
+
+---
+
+## Response Headers
+
+All responses include:
+| Header | Description |
+|--------|-------------|
+| `X-Request-Id` | Unique request ID for log correlation |
+
+Rate-limited endpoints (`POST /checkout`) additionally include:
+| Header | Description |
+|--------|-------------|
+| `RateLimit-Limit` | Max requests per window |
+| `RateLimit-Remaining` | Requests remaining in current window |
+| `RateLimit-Reset` | Seconds until window resets |
+| `Retry-After` | Seconds to wait (only on 429) |

@@ -9,11 +9,15 @@
  *
  * Uses only existing tables: warehouses, inventories, orders, shipments.
  * No new tables created.
+ *
+ * Week 4: Uses Zod validation middleware and Pino structured logging.
  */
 'use strict';
 
 const { Router } = require('express');
 const pool = require('../db/pool');
+const logger = require('../services/logger');
+const { validateMapDataQuery } = require('../middleware/validators');
 
 const router = Router();
 
@@ -32,22 +36,13 @@ const DEFAULT_ROUTE_LIMIT = 50;
 /**
  * GET /api/v1/dashboard/map-data
  *
- * Returns warehouse locations with inventory health and recent order routes.
+ * Middleware chain:
+ *   1. validateMapDataQuery — Zod query param validation (400 if invalid)
+ *   2. handler — data aggregation + response
  *
- * Response shape:
- *   {
- *     warehouses: [{
- *       id, name, lat, lng, active,
- *       totalStock, lowStockSkus, healthStatus
- *     }],
- *     routes: [{
- *       orderId, status, createdAt,
- *       customer: { lat, lng },
- *       shipments: [{ shipmentId, warehouseId, warehouseName, warehouseLat, warehouseLng, distanceKm, boxSize, totalCost }]
- *     }]
- *   }
+ * Returns warehouse locations with inventory health and recent order routes.
  */
-router.get('/map-data', async (req, res, next) => {
+router.get('/map-data', validateMapDataQuery, async (req, res, next) => {
   try {
     // ─── Warehouses with Inventory Health ──────────────────
     const warehouseResult = await pool.query(`
@@ -78,10 +73,8 @@ router.get('/map-data', async (req, res, next) => {
     }));
 
     // ─── Recent Order Routes ──────────────────────────────
-    const limit = Math.min(
-      Math.max(parseInt(req.query.limit, 10) || DEFAULT_ROUTE_LIMIT, 1),
-      200
-    );
+    // limit is already validated and transformed by Zod middleware
+    const limit = req.query.limit || DEFAULT_ROUTE_LIMIT;
 
     const ordersResult = await pool.query(`
       SELECT

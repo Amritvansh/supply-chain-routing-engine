@@ -536,7 +536,7 @@ describe('GET /api/v1/orders/:id', () => {
     const res = await request(app).get('/api/v1/orders/not-a-uuid');
 
     expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe('INVALID_ID');
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
   });
 });
 
@@ -551,6 +551,17 @@ describe('GET /api/v1/orders/:id/explain', () => {
     // Order exists
     mockPool.query.mockResolvedValueOnce({
       rows: [{ id: validUUID, customer_lat: 28.6, customer_lng: 77.2, status: 'ROUTED' }],
+    });
+
+    // Shipments for routing context
+    mockPool.query.mockResolvedValueOnce({
+      rows: [{
+        warehouse_id: 'w1',
+        warehouse_name: 'Delhi Hub',
+        box_size: 'MEDIUM',
+        total_cost: '10.60',
+        distance_km: '15.20',
+      }],
     });
 
     // Cache hit
@@ -634,7 +645,7 @@ describe('GET /api/v1/orders/:id/explain', () => {
     const res = await request(app).get('/api/v1/orders/bad-id/explain');
 
     expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe('INVALID_ID');
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
   });
 
   test('returns 404 when order does not exist', async () => {
@@ -765,7 +776,7 @@ describe('POST /api/v1/webhooks/logistics', () => {
       .send({ shipment_id: shipmentId, status: 'CANCELLED' });
 
     expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe('INVALID_STATUS');
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
   });
 
   test('returns 400 when fields are missing', async () => {
@@ -774,7 +785,7 @@ describe('POST /api/v1/webhooks/logistics', () => {
       .send({});
 
     expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe('MISSING_FIELDS');
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
   });
 
   test('returns 404 when shipment does not exist', async () => {
@@ -794,7 +805,7 @@ describe('POST /api/v1/webhooks/logistics', () => {
       .send({ shipment_id: 'not-a-uuid', status: 'PICKED_UP' });
 
     expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe('INVALID_SHIPMENT_ID');
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
   });
 });
 
@@ -909,17 +920,11 @@ describe('GET /api/v1/dashboard/map-data', () => {
     expect(orderQuery[1]).toEqual([10]);
   });
 
-  test('clamps limit to valid range', async () => {
-    mockPool.query
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [] });
-
+  test('rejects limit outside valid range', async () => {
     const res = await request(app).get('/api/v1/dashboard/map-data?limit=999');
 
-    expect(res.status).toBe(200);
-    // Limit should be clamped to 200
-    const orderQuery = mockPool.query.mock.calls[1];
-    expect(orderQuery[1]).toEqual([200]);
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
   });
 
   test('groups multiple shipments under one order', async () => {
@@ -984,7 +989,7 @@ describe('Week 3 Implemented Endpoints — Validation Checks', () => {
       .send({});
 
     expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe('INVALID_REQUEST');
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
   });
 });
 

@@ -1,11 +1,10 @@
 /**
  * Supply Chain Routing Engine — Express Application
- * 
- * Member 2 (API & Logistics Orchestration Lead) — Week 1
- * 
+ *
+ * Member 2 (API & Logistics Orchestration Lead)
+ *
  * Configures Express with middleware stack and mounts all /api/v1 routes.
- * Business logic is NOT implemented in Week 1 — route stubs return 501.
- * 
+ *
  * ARCHITECTURAL NOTE:
  *   POST /api/v1/orders/checkout  → synchronous deterministic path (no AI)
  *   GET  /api/v1/orders/:id/explain → asynchronous AI path (Gemini, decoupled)
@@ -14,12 +13,13 @@
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
-const morgan = require('morgan');
 
 const env = require('./config/env');
 const apiRouter = require('./routes/index');
 const errorHandler = require('./middleware/errorHandler');
 const requestLogger = require('./middleware/requestLogger');
+const requestIdMiddleware = require('./middleware/requestId');
+const logger = require('./services/logger');
 
 const app = express();
 
@@ -28,10 +28,11 @@ app.use(helmet());
 app.use(cors());
 app.use(express.json());
 
-// ─── Logging ─────────────────────────────────────────────────
-// Morgan for HTTP request logging (concise dev format)
-app.use(morgan('dev'));
-// Custom request logger for structured duration tracking
+// ─── Request ID Generation (must be before logger and routes) ─
+app.use(requestIdMiddleware);
+
+// ─── Structured Logging ─────────────────────────────────────
+// Pino-based structured request logging with requestId correlation
 app.use(requestLogger);
 
 // ─── API Routes ──────────────────────────────────────────────
@@ -54,9 +55,8 @@ app.use(errorHandler);
 if (require.main === module) {
   const PORT = env.PORT;
   app.listen(PORT, () => {
-    console.log(`[Server] Supply Chain Routing Engine running on http://localhost:${PORT}`);
-    console.log(`[Health] http://localhost:${PORT}/api/v1/health`);
-    console.log(`[Env]    ${env.NODE_ENV}`);
+    logger.info({ port: PORT, env: env.NODE_ENV }, 'Supply Chain Routing Engine started');
+    logger.info({ url: `http://localhost:${PORT}/api/v1/health` }, 'Health endpoint');
   });
 }
 

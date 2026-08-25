@@ -85,7 +85,8 @@ async function releaseLock(sku, token) {
   } catch (err) {
     // Log but don't throw — the TTL will auto-expire the lock.
     // The caller should not crash if release fails after a successful checkout.
-    console.error(`[RedisLock] Release failed for SKU "${sku}":`, err.message);
+    const logger = require('./logger');
+    logger.error({ sku, error: err.message }, 'Redis lock release failed');
     return false;
   }
 }

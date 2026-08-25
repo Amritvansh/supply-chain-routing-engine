@@ -1,13 +1,18 @@
 /**
  * Centralized Error Handler Middleware
- * 
+ *
  * All errors thrown or passed via next(err) land here.
  * Returns a consistent JSON error envelope:
- * 
+ *
  *   { error: { code: "ERROR_CODE", message: "Human readable message" } }
- * 
+ *
  * Stack traces are only included in development mode.
+ * Uses Pino structured logging instead of console.error.
  */
+
+'use strict';
+
+const logger = require('../services/logger');
 const env = require('../config/env');
 
 function errorHandler(err, req, res, _next) {
@@ -20,11 +25,18 @@ function errorHandler(err, req, res, _next) {
   // Human-readable message
   const message = err.message || 'An unexpected error occurred';
 
-  // Log the full error server-side (always)
-  console.error(`[Error] ${req.method} ${req.originalUrl} → ${statusCode} ${code}: ${message}`);
-  if (env.NODE_ENV === 'development' && err.stack) {
-    console.error(err.stack);
-  }
+  // Structured error logging via Pino
+  const log = req.log || logger;
+  log.error({
+    err: {
+      code,
+      message,
+      ...(env.NODE_ENV === 'development' ? { stack: err.stack } : {}),
+    },
+    status: statusCode,
+    method: req.method,
+    path: req.originalUrl,
+  }, 'Unhandled error');
 
   // Build response
   const response = {
