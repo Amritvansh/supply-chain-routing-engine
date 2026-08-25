@@ -97,6 +97,101 @@ The database has 9 tables organized into two groups:
 - `webhook_events` — Simulated inbound shipment status transitions
 - `ai_explanations` — Cached AI-generated routing explanations (leaf table)
 
+### Entity Relationship Diagram
+
+```mermaid
+erDiagram
+    %% ─── Transactional Core ───────────────────────────────
+    warehouses {
+        UUID id PK
+        TEXT name
+        DOUBLE_PRECISION lat
+        DOUBLE_PRECISION lng
+        BOOLEAN active
+    }
+
+    skus {
+        TEXT sku PK
+        TEXT name
+        INT length_cm
+        INT width_cm
+        INT height_cm
+        NUMERIC weight_kg
+    }
+
+    inventories {
+        UUID id PK
+        UUID warehouse_id FK
+        TEXT sku FK
+        INT available_qty
+        INT reserved_qty
+    }
+
+    orders {
+        UUID id PK
+        DOUBLE_PRECISION customer_lat
+        DOUBLE_PRECISION customer_lng
+        TEXT status
+        TEXT idempotency_key UK
+        TIMESTAMPTZ created_at
+    }
+
+    order_items {
+        UUID id PK
+        UUID order_id FK
+        TEXT sku FK
+        INT qty
+    }
+
+    shipments {
+        UUID id PK
+        UUID order_id FK
+        UUID warehouse_id FK
+        TEXT box_size
+        NUMERIC total_cost
+        NUMERIC distance_km
+        TIMESTAMPTZ created_at
+    }
+
+    %% ─── Observability / Async Layer ─────────────────────
+    lock_audit {
+        UUID id PK
+        TEXT sku
+        BOOLEAN acquired
+        INT waited_ms
+        TIMESTAMPTZ created_at
+    }
+
+    webhook_events {
+        UUID id PK
+        UUID shipment_id FK
+        TEXT status
+        TIMESTAMPTZ created_at
+    }
+
+    ai_explanations {
+        UUID id PK
+        UUID order_id FK
+        TEXT explanation_text
+        TEXT model_used
+        TEXT source
+        INT latency_ms
+        TIMESTAMPTZ created_at
+    }
+
+    %% ─── Relationships ──────────────────────────────────
+    warehouses ||--o{ inventories : "stocks"
+    skus ||--o{ inventories : "tracked at"
+    orders ||--o{ order_items : "contains"
+    orders ||--o{ shipments : "fulfilled by"
+    skus ||--o{ order_items : "references"
+    warehouses ||--o{ shipments : "ships from"
+    shipments ||--o{ webhook_events : "lifecycle"
+    orders ||--o| ai_explanations : "LEAF: explained by"
+```
+
+> **⚠️ Note:** `ai_explanations` is a **leaf table** — it points TO `orders` via a FK, but **no transactional table points INTO it**. The checkout path never reads or writes this table. It can be truncated or rebuilt independently.
+
 ### Table Details
 
 #### `warehouses`
@@ -136,6 +231,9 @@ Caches AI-generated (or fallback-template) explanations of routing decisions. Th
 | `idx_inventories_sku` | inventories | sku | Fast SKU-based stock lookups during routing |
 | `idx_inventories_warehouse` | inventories | warehouse_id | Fast per-warehouse inventory queries |
 | `idx_orders_status` | orders | status | Dashboard filtering by order status |
+| `idx_shipments_order_id` | shipments | order_id | Order detail joins (Week 4) |
+| `idx_order_items_order_id` | order_items | order_id | Order detail joins (Week 4) |
+| `idx_orders_created_at` | orders | created_at DESC | Dashboard recent-orders sort (Week 4) |
 
 ---
 
@@ -143,6 +241,11 @@ Caches AI-generated (or fallback-template) explanations of routing decisions. Th
 
 ```
 server/
+├── algorithms/
+│   ├── binPacking.js          # 3D bin-packing (FFD algorithm)
+│   ├── costFunction.js        # Deterministic routing cost calculator
+│   ├── inputValidation.js     # Input sanity guards (Week 4)
+│   └── routingEngine.js       # Warehouse selection + split routing
 ├── db/
 │   ├── migrations/
 │   │   ├── 001_warehouses.sql
@@ -153,10 +256,20 @@ server/
 │   │   ├── 006_shipments.sql
 │   │   ├── 007_lock_audit.sql
 │   │   ├── 008_webhook_events.sql
-│   │   └── 009_ai_explanations.sql
-│   ├── migrate.js          # Idempotent migration runner
-│   └── seed.js             # Sample data seeder
-├── .env.example             # Environment variable template
+│   │   ├── 009_ai_explanations.sql
+│   │   └── 010_performance_indexes.sql
+│   ├── transactions/
+│   │   └── checkoutTransaction.js
+│   ├── lockAudit.js
+│   ├── migrate.js             # Idempotent migration runner
+│   ├── pool.js
+│   └── seed.js                # Sample data seeder
+├── errors/
+│   └── checkoutErrors.js
+├── services/
+│   ├── redisClient.js
+│   └── redisLock.js
+├── .env.example               # Environment variable template
 └── package.json
 ```
 
