@@ -20,6 +20,7 @@
 
 const { calculateCost } = require('./costFunction');
 const { packItems } = require('./binPacking');
+const { validateOrderItems, validateWarehouses } = require('./inputValidation');
 
 /**
  * Select the optimal warehouse for a given order.
@@ -34,6 +35,14 @@ const { packItems } = require('./binPacking');
  * @returns {Object} Routing decision
  */
 function selectOptimalWarehouse({ warehouses, orderItems }) {
+  // Input sanity guards (Week 4)
+  if (warehouses && warehouses.length > 0) {
+    validateWarehouses(warehouses);
+  }
+  if (orderItems && orderItems.length > 0) {
+    validateOrderItems(orderItems);
+  }
+
   if (!warehouses || warehouses.length === 0) {
     return {
       status: 'NO_WAREHOUSES',
@@ -66,16 +75,9 @@ function selectOptimalWarehouse({ warehouses, orderItems }) {
     };
   }
 
-  // If items require a split shipment, return the split condition
-  // Full recursive multi-warehouse split routing is deferred to Week 4
+  // If items require a split shipment, route each group independently
   if (packingResult.status === 'SPLIT_SHIPMENT') {
-    return {
-      status: 'SPLIT_SHIPMENT',
-      chosen: null,
-      alternatives: [],
-      packing: packingResult,
-      message: 'Order requires split shipment. Multi-warehouse routing deferred to Week 4.',
-    };
+    return routeSplitShipment({ warehouses, packingResult });
   }
 
   // Step 2: For single-box orders, evaluate each warehouse
@@ -225,8 +227,182 @@ function getWorstDepletion(warehouse, orderItems) {
   return worst;
 }
 
+/**
+ * Route a split shipment: iterate over bin-packing groups, selecting the
+ * optimal warehouse for each group while tracking committed stock.
+ *
+ * Virtual inventory ensures later groups cannot double-allocate stock
+ * that earlier groups have already reserved.
+ *
+ * @param {Object} params
+ * @param {Array<Object>} params.warehouses - Available warehouses with inventory
+ * @param {Object} params.packingResult - binPacking SPLIT_SHIPMENT result with groups
+ * @returns {Object} Split shipment routing decision
+ */
+function routeSplitShipment({ warehouses, packingResult }) {
+  const groups = packingResult.groups;
+
+  // Build virtual inventory: { warehouseId: { sku: availableQty } }
+  // This is a deep copy so we can deduct without mutating the input.
+  const virtualInventory = {};
+  for (const wh of warehouses) {
+    virtualInventory[wh.id] = { ...wh.inventory };
+  }
+
+  const shipmentPlan = [];
+  let totalCost = 0;
+  let fullyRoutable = true;
+
+  for (let groupIndex = 0; groupIndex < groups.length; groupIndex++) {
+    const group = groups[groupIndex];
+
+    // Build warehouses with virtual (committed-adjusted) inventory
+    const virtualWarehouses = warehouses.map(wh => ({
+      ...wh,
+      inventory: { ...virtualInventory[wh.id] },
+    }));
+
+    // Route this group against virtual inventory
+    const groupResult = routeGroupAgainstInventory({
+      warehouses: virtualWarehouses,
+      groupItems: group.items,
+      boxSize: group.boxSize,
+    });
+
+    if (groupResult.chosen) {
+      // Deduct committed stock from virtual inventory
+      const chosenId = groupResult.chosen.warehouseId;
+      for (const item of group.items) {
+        virtualInventory[chosenId][item.sku] =
+          (virtualInventory[chosenId][item.sku] || 0) - item.qty;
+      }
+
+      totalCost += groupResult.chosen.totalCost;
+    } else {
+      fullyRoutable = false;
+    }
+
+    shipmentPlan.push({
+      groupIndex,
+      boxSize: group.boxSize,
+      items: group.items,
+      totalVolumeCm3: group.totalVolumeCm3,
+      totalWeightKg: group.totalWeightKg,
+      chosen: groupResult.chosen,
+      alternatives: groupResult.alternatives,
+    });
+  }
+
+  // If no groups could be routed at all, return NO_ELIGIBLE_WAREHOUSE
+  if (shipmentPlan.every(g => g.chosen === null)) {
+    return {
+      status: 'NO_ELIGIBLE_WAREHOUSE',
+      chosen: null,
+      alternatives: [],
+      shipmentPlan,
+      packing: packingResult,
+      message: 'No warehouse has sufficient inventory for any shipment group.',
+    };
+  }
+
+  return {
+    status: fullyRoutable ? 'SPLIT_ROUTED' : 'PARTIAL_SPLIT',
+    // Backward compat: `chosen` = first group's warehouse (for callers expecting a single chosen)
+    chosen: shipmentPlan[0]?.chosen || null,
+    alternatives: shipmentPlan[0]?.alternatives || [],
+    shipmentPlan,
+    packing: packingResult,
+    totalCost: Math.round(totalCost * 100) / 100,
+    message: fullyRoutable
+      ? `Order split into ${shipmentPlan.length} shipment groups, all routed.`
+      : `Order split into ${shipmentPlan.length} groups; some groups could not be routed.`,
+  };
+}
+
+/**
+ * Route a single shipment group against the given warehouses.
+ * Mirrors the logic in selectOptimalWarehouse but for a pre-determined
+ * box size and item set.
+ *
+ * @param {Object} params
+ * @param {Array<Object>} params.warehouses - Warehouses with virtual inventory
+ * @param {Array<Object>} params.groupItems - Items in this group (with sku, qty)
+ * @param {string} params.boxSize - Pre-determined box size from bin packing
+ * @returns {{ chosen: Object|null, alternatives: Array }}
+ */
+function routeGroupAgainstInventory({ warehouses, groupItems, boxSize }) {
+  const candidates = [];
+  const ineligible = [];
+
+  for (const warehouse of warehouses) {
+    const eligibilityResult = checkEligibility(warehouse, groupItems);
+
+    if (!eligibilityResult.eligible) {
+      ineligible.push({
+        warehouseId: warehouse.id,
+        name: warehouse.name,
+        distanceKm: warehouse.distanceKm,
+        rejectionReason: eligibilityResult.reason,
+        totalCost: null,
+        penalty: null,
+      });
+      continue;
+    }
+
+    const worstDepletion = getWorstDepletion(warehouse, groupItems);
+    const costBreakdown = calculateCost({
+      distanceKm: warehouse.distanceKm,
+      boxSize,
+      availableQty: worstDepletion.availableQty,
+      requestedQty: worstDepletion.requestedQty,
+    });
+
+    candidates.push({
+      warehouseId: warehouse.id,
+      name: warehouse.name,
+      distanceKm: warehouse.distanceKm,
+      boxSize,
+      costBreakdown,
+      totalCost: costBreakdown.totalCost,
+    });
+  }
+
+  if (candidates.length === 0) {
+    return { chosen: null, alternatives: ineligible };
+  }
+
+  candidates.sort((a, b) => a.totalCost - b.totalCost);
+  const chosen = candidates[0];
+
+  const alternatives = [
+    ...candidates.slice(1).map(c => ({
+      warehouseId: c.warehouseId,
+      name: c.name,
+      distanceKm: c.distanceKm,
+      penalty: c.costBreakdown.depletionPenalty,
+      totalCost: c.totalCost,
+      rejectionReason: null,
+    })),
+    ...ineligible,
+  ];
+
+  return {
+    chosen: {
+      warehouseId: chosen.warehouseId,
+      name: chosen.name,
+      distanceKm: chosen.distanceKm,
+      boxSize: chosen.boxSize,
+      costBreakdown: chosen.costBreakdown,
+      totalCost: chosen.totalCost,
+    },
+    alternatives,
+  };
+}
+
 module.exports = {
   selectOptimalWarehouse,
+  routeSplitShipment,
+  routeGroupAgainstInventory,
   checkEligibility,
   getWorstDepletion,
 };
