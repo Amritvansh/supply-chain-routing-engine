@@ -1,14 +1,19 @@
 /**
- * AIExplanationWidget — Week 2: Wired to GET /api/v1/orders/:id/explain
+ * AIExplanationWidget — Week 4: Multi-shipment support
  *
  * Displays AI-generated or deterministic-fallback explanations for
- * routing decisions. Supports four states: idle, loading, success, error.
+ * routing decisions. Supports both single and multi-shipment responses.
  *
  * ARCHITECTURAL NOTE:
  *   This widget is intentionally independently callable — the parent
  *   component decides when to trigger the fetch, preserving the
  *   hybrid architecture's async separation. The checkout result is
  *   never blocked by this widget.
+ *
+ * Response shapes handled:
+ *   Single:  { explanation, source, modelUsed, latencyMs, generatedAt, cached }
+ *   Multi:   { explanations: [{ shipmentIndex, shipmentId, warehouseName, explanation, source }],
+ *              multiShipment: true, modelUsed, latencyMs, generatedAt, cached }
  *
  * Source badges:
  *   - "gemini"            → "✦ AI Explanation" (accent style)
@@ -18,6 +23,41 @@
  */
 import { useState, useCallback, useEffect } from 'react';
 import { getExplanation } from '../lib/apiClient';
+
+/** Badge for explanation source. */
+function SourceBadge({ source }) {
+  const isGemini = source === 'gemini';
+  return (
+    <span
+      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider"
+      style={{
+        background: isGemini ? 'var(--color-accent-glow)' : 'rgba(100, 116, 139, 0.15)',
+        color: isGemini ? 'var(--color-accent)' : 'var(--color-text-muted)',
+      }}
+    >
+      {isGemini ? '✦ AI Explanation' : 'Computed Summary'}
+    </span>
+  );
+}
+
+/** Single explanation block (used for both single and per-shipment rendering). */
+function ExplanationBlock({ title, explanation, source, showDivider = false }) {
+  return (
+    <div className={showDivider ? 'pt-3 mt-3 border-t border-[var(--color-border)]' : ''}>
+      {title && (
+        <div className="flex items-center justify-between mb-2">
+          <h4 className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">
+            {title}
+          </h4>
+          <SourceBadge source={source} />
+        </div>
+      )}
+      <p className="text-sm text-[var(--color-text-primary)] leading-relaxed">
+        {explanation}
+      </p>
+    </div>
+  );
+}
 
 export default function AIExplanationWidget({ orderId, autoFetch = false }) {
   const [state, setState] = useState('idle'); // idle | loading | success | error
@@ -39,7 +79,7 @@ export default function AIExplanationWidget({ orderId, autoFetch = false }) {
     }
   }, [orderId]);
 
-  // Auto-fetch if requested (e.g., from OrderSimulator in Week 3)
+  // Auto-fetch if requested (e.g., from OrderSimulator)
   useEffect(() => {
     if (autoFetch && orderId) {
       fetchExplanation();
@@ -127,11 +167,13 @@ export default function AIExplanationWidget({ orderId, autoFetch = false }) {
   }
 
   // ─── Success State ──────────────────────────────────────
-  const isGemini = data?.source === 'gemini';
+  const isMultiShipment = data?.multiShipment === true && Array.isArray(data?.explanations);
+  const overallSource = data?.source;
+  const isGemini = overallSource === 'gemini';
 
   return (
     <div className="glass-card p-4">
-      {/* Header with source badge */}
+      {/* Header with overall source badge */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <div
@@ -141,27 +183,37 @@ export default function AIExplanationWidget({ orderId, autoFetch = false }) {
           />
           <h3 className="text-sm font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">
             AI Explanation
+            {isMultiShipment && (
+              <span className="ml-2 text-[10px] font-medium text-[var(--color-text-muted)] normal-case">
+                ({data.explanations.length} shipment{data.explanations.length !== 1 ? 's' : ''})
+              </span>
+            )}
           </h3>
         </div>
-        <span
-          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider"
-          style={{
-            background: isGemini ? 'var(--color-accent-glow)' : 'rgba(100, 116, 139, 0.15)',
-            color: isGemini ? 'var(--color-accent)' : 'var(--color-text-muted)',
-          }}
-        >
-          {isGemini ? '✦ AI Explanation' : 'Computed Summary'}
-        </span>
+        {!isMultiShipment && <SourceBadge source={overallSource} />}
       </div>
 
-      {/* Explanation text */}
-      <p className="text-sm text-[var(--color-text-primary)] leading-relaxed mb-3">
-        {data?.explanation}
-      </p>
+      {/* Single explanation */}
+      {!isMultiShipment && (
+        <p className="text-sm text-[var(--color-text-primary)] leading-relaxed mb-3">
+          {data?.explanation}
+        </p>
+      )}
+
+      {/* Multi-shipment explanations */}
+      {isMultiShipment && data.explanations.map((exp, idx) => (
+        <ExplanationBlock
+          key={exp.shipmentId || idx}
+          title={`Shipment ${exp.shipmentIndex + 1}${exp.warehouseName ? ` — ${exp.warehouseName}` : ''}`}
+          explanation={exp.explanation}
+          source={exp.source}
+          showDivider={idx > 0}
+        />
+      ))}
 
       {/* Meta info */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-[var(--color-text-muted)] border-t border-[var(--color-border)] pt-2 mt-2">
-        {data?.modelUsed && (
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-[var(--color-text-muted)] border-t border-[var(--color-border)] pt-2 mt-3">
+        {data?.modelUsed && data.modelUsed !== 'n/a' && (
           <span>Model: {data.modelUsed}</span>
         )}
         {data?.latencyMs != null && (
