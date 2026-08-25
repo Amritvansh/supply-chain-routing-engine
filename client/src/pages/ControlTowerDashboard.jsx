@@ -100,14 +100,106 @@ function MapLegend() {
           />
           <span className="text-xs text-[var(--color-text-secondary)]">Customer Location</span>
         </div>
-        <div className="flex items-center gap-2">
-          <span
-            className="w-4 h-1 rounded shrink-0"
-            style={{ background: ROUTE_COLORS[0] }}
-            aria-hidden="true"
-          />
-          <span className="text-xs text-[var(--color-text-secondary)]">Active Route</span>
+        {/* Split-shipment route color legend */}
+        <div className="pt-1 border-t border-[var(--color-border-subtle)] mt-1">
+          <span className="text-[10px] text-[var(--color-text-muted)] uppercase tracking-wider font-semibold">Shipment Routes</span>
         </div>
+        {ROUTE_COLORS.slice(0, 4).map((color, idx) => (
+          <div key={idx} className="flex items-center gap-2">
+            <span
+              className="w-4 h-1 rounded shrink-0"
+              style={{ background: color }}
+              aria-hidden="true"
+            />
+            <span className="text-xs text-[var(--color-text-secondary)]">
+              {idx === 0 ? 'Shipment 1 / Single' : `Shipment ${idx + 1}`}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Selected order detail panel — shown when a route is clicked. */
+function SelectedOrderPanel({ route, onClose }) {
+  if (!route) return null;
+  const shipments = route.shipments || [];
+  const totalCost = shipments.reduce((sum, s) => sum + parseFloat(s.totalCost || 0), 0);
+  const isSplit = shipments.length > 1;
+
+  return (
+    <div
+      className="absolute top-4 right-14 z-10 glass-card p-4 animate-fade-in"
+      style={{ width: 280 }}
+      role="region"
+      aria-label="Selected order details"
+    >
+      <div className="flex items-center justify-between mb-3">
+        <h4 className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">
+          Order Details
+        </h4>
+        <button
+          onClick={onClose}
+          className="w-6 h-6 rounded flex items-center justify-center text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg-hover)] transition-colors"
+          aria-label="Close order details"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Order ID */}
+      <p className="text-[10px] font-mono text-[var(--color-text-muted)] mb-2 truncate">
+        {route.orderId}
+      </p>
+
+      {/* Summary stats */}
+      <div className="grid grid-cols-2 gap-2 mb-3">
+        <div className="rounded-lg bg-[var(--color-bg-primary)] border border-[var(--color-border-subtle)] p-2 text-center">
+          <p className="text-xs text-[var(--color-text-muted)]">Shipments</p>
+          <p className="text-sm font-bold text-[var(--color-text-primary)]">{shipments.length}</p>
+        </div>
+        <div className="rounded-lg bg-[var(--color-bg-primary)] border border-[var(--color-border-subtle)] p-2 text-center">
+          <p className="text-xs text-[var(--color-text-muted)]">Total Cost</p>
+          <p className="text-sm font-bold text-[var(--color-accent)]">₹{totalCost.toFixed(2)}</p>
+        </div>
+      </div>
+
+      {isSplit && (
+        <span className="inline-block mb-3 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[var(--color-warning-glow)] text-[var(--color-warning)] uppercase">
+          Split Shipment
+        </span>
+      )}
+
+      {/* Per-shipment breakdown */}
+      <div className="space-y-2">
+        {shipments.map((s, idx) => (
+          <div
+            key={s.shipmentId || idx}
+            className="rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-bg-primary)] p-2"
+          >
+            <div className="flex items-center gap-2 mb-1">
+              <span
+                className="w-2.5 h-2.5 rounded-full shrink-0"
+                style={{ background: ROUTE_COLORS[idx % ROUTE_COLORS.length] }}
+              />
+              <span className="text-xs font-semibold text-[var(--color-text-primary)] truncate">
+                {s.warehouseName || 'Unknown'}
+              </span>
+              {s.boxSize && (
+                <span className="ml-auto text-[10px] text-[var(--color-accent)] font-semibold">
+                  📦 {s.boxSize}
+                </span>
+              )}
+            </div>
+            <div className="flex justify-between text-[10px] text-[var(--color-text-muted)]">
+              <span>{parseFloat(s.distanceKm).toFixed(1)} km</span>
+              <span className="font-medium text-[var(--color-text-secondary)]">₹{parseFloat(s.totalCost).toFixed(2)}</span>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -304,6 +396,7 @@ export default function ControlTowerDashboard() {
   const [routes, setRoutes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [selectedRoute, setSelectedRoute] = useState(null);
 
   /** Fetch warehouse data (detailed inventory) and map data (routes). */
   const fetchData = useCallback(async () => {
@@ -567,10 +660,63 @@ export default function ControlTowerDashboard() {
             </button>
           </div>
         ) : (
+          <>
           <div className="relative glass-card overflow-hidden" style={{ minHeight: '460px' }}>
             <div ref={mapContainerRef} className="w-full" style={{ height: '460px' }} />
             <MapLegend />
+            <SelectedOrderPanel route={selectedRoute} onClose={() => setSelectedRoute(null)} />
           </div>
+
+          {/* Recent Orders List — click to select */}
+          {routes.length > 0 && (
+            <div className="mt-4 glass-card p-4">
+              <h3 className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3">
+                Recent Orders — click to inspect route
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-48 overflow-y-auto">
+                {routes.slice(0, 12).map((route) => {
+                  const isSelected = selectedRoute?.orderId === route.orderId;
+                  const isSplit = (route.shipments || []).length > 1;
+                  return (
+                    <button
+                      key={route.orderId}
+                      onClick={() => setSelectedRoute(isSelected ? null : route)}
+                      className={`text-left rounded-lg border p-2.5 transition-all duration-200 ${
+                        isSelected
+                          ? 'border-[var(--color-accent)] bg-[var(--color-accent-glow)]'
+                          : 'border-[var(--color-border-subtle)] bg-[var(--color-bg-primary)] hover:border-[var(--color-border)]'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <div className="flex -space-x-1">
+                          {(route.shipments || []).slice(0, 3).map((s, idx) => (
+                            <span
+                              key={idx}
+                              className="w-2.5 h-2.5 rounded-full border border-[var(--color-bg-primary)]"
+                              style={{ background: ROUTE_COLORS[idx % ROUTE_COLORS.length] }}
+                            />
+                          ))}
+                        </div>
+                        <span className="text-xs text-[var(--color-text-primary)] font-medium truncate">
+                          {(route.shipments || []).map((s) => s.warehouseName).join(' → ')}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between mt-1">
+                        <span className="text-[10px] text-[var(--color-text-muted)]">
+                          {route.shipments?.length || 0} shipment{(route.shipments?.length || 0) !== 1 ? 's' : ''}
+                          {isSplit && ' (split)'}
+                        </span>
+                        <span className="text-[10px] text-[var(--color-accent)] font-semibold">
+                          ₹{(route.shipments || []).reduce((sum, s) => sum + parseFloat(s.totalCost || 0), 0).toFixed(2)}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          </>
         )}
       </div>
     </div>
