@@ -572,10 +572,53 @@ input[type="number"]::-webkit-outer-spin-button {
   transform: scale(1.1);
 }
 
+/* ─── Recharts Custom Tooltip ────────────────────────────── */
+.recharts-custom-tooltip {
+  background: var(--color-bg-card-solid);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+  font-family: var(--font-sans);
+}
+
+.recharts-custom-tooltip__label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* Recharts legend text fix for dark theme */
+.recharts-legend-item-text {
+  color: var(--color-text-secondary) !important;
+  font-size: 11px !important;
+}
+
 /* ─── Responsive ─────────────────────────────────────────── */
+@media (max-width: 1024px) {
+  .page-title {
+    font-size: 1.75rem;
+  }
+}
+
 @media (max-width: 640px) {
   .page-title {
     font-size: 1.5rem;
+  }
+
+  .stat-card {
+    padding: 0.75rem;
+  }
+
+  .stat-card p:last-child {
+    font-size: 1.25rem;
+  }
+
+  .glass-card {
+    padding: 1rem;
   }
 }
 
