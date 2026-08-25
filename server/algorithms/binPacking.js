@@ -27,6 +27,8 @@
 
 'use strict';
 
+const { validateOrderItems } = require('./inputValidation');
+
 /**
  * Box tier definitions ordered from smallest to largest.
  * Each tier has a maximum volume (cm³) and weight (kg).
@@ -104,6 +106,9 @@ function packItems(orderItems) {
   if (!orderItems || orderItems.length === 0) {
     throw new Error('packItems requires at least one item.');
   }
+
+  // Input sanity guards (Week 4)
+  validateOrderItems(orderItems);
 
   // Expand items: if qty > 1, treat each unit as a separate packing unit
   // so the FFD sort operates on individual units.
