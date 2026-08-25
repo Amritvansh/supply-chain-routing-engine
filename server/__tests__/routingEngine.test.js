@@ -290,9 +290,11 @@ describe('routingEngine', () => {
         orderItems: bigItems,
       });
 
-      expect(result.status).toBe('SPLIT_SHIPMENT');
+      expect(result.status).toBe('SPLIT_ROUTED');
       expect(result.packing).toBeDefined();
       expect(result.packing.groups).toBeDefined();
+      expect(result.shipmentPlan).toBeDefined();
+      expect(result.shipmentPlan.length).toBe(result.packing.groups.length);
     });
   });
 
