@@ -14,6 +14,7 @@ import Layout from './layouts/Layout';
 import ControlTowerDashboard from './pages/ControlTowerDashboard';
 import OrderSimulator from './pages/OrderSimulator';
 import Analytics from './pages/Analytics';
+import HowItWorks from './pages/HowItWorks';
 
 export default function App() {
   return (
@@ -23,6 +24,7 @@ export default function App() {
           <Route index element={<ControlTowerDashboard />} />
           <Route path="order-simulator" element={<OrderSimulator />} />
           <Route path="analytics" element={<Analytics />} />
+          <Route path="how-it-works" element={<HowItWorks />} />
           {/* Catch-all: redirect unknown routes to Control Tower */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
