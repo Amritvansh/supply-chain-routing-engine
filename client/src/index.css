@@ -906,5 +906,63 @@ input[type="number"]::-webkit-outer-spin-button {
     width: 36px;
     height: 36px;
   }
+
+  .layout-main > div {
+    padding: 16px !important;
+  }
+}
+
+/* ─── Focus Visible (Accessibility) ──────────────────────── */
+button:focus-visible,
+a:focus-visible,
+select:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* ─── Smooth Route Transitions ───────────────────────────── */
+.layout-main {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* ─── Status Pulse ───────────────────────────────────────── */
+@keyframes statusPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.animate-status-pulse {
+  animation: statusPulse 2s ease-in-out infinite;
+}
+
+/* ─── Improved Data Table (Mobile) ───────────────────────── */
+@media (max-width: 640px) {
+  .data-table {
+    font-size: 11px;
+  }
+
+  .data-table th,
+  .data-table td {
+    padding: 6px 8px;
+  }
+}
+
+/* ─── Chart Container Mobile Fix ─────────────────────────── */
+@media (max-width: 640px) {
+  .recharts-wrapper {
+    font-size: 10px;
+  }
+}
+
+/* ─── Button Disabled Cursor ─────────────────────────────── */
+button:disabled {
+  cursor: not-allowed;
+}
+
+/* ─── Selection Color ────────────────────────────────────── */
+::selection {
+  background: rgba(99, 102, 241, 0.3);
+  color: var(--color-text-primary);
 }
 
