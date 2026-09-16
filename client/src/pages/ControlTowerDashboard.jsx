@@ -1,11 +1,12 @@
 /**
- * ControlTowerDashboard — Week 3: Map routes + warehouse markers
+ * ControlTowerDashboard — Polished Control Tower with KPI cards + Map
  *
  * Integrates MapLibre GL JS with:
  *   - Warehouse markers (healthy vs low-stock) from getWarehouses()
  *   - Route lines (warehouse → customer) from getMapData()
  *   - Customer destination markers
  *   - Interactive popups, legend, and live stats
+ *   - Route click → SelectedOrderPanel
  *
  * Data sources:
  *   - GET /api/v1/warehouses   → detailed inventory popups
@@ -31,20 +32,79 @@ const ROUTE_COLORS = [
   '#fb923c', // orange
 ];
 
+// ─── SVG Icons for KPI Cards ────────────────────────────────
+
+function WarehouseIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 21V8l9-5 9 5v13" />
+      <path d="M9 21V13h6v8" />
+      <path d="M1 21h22" />
+    </svg>
+  );
+}
+
+function PackageIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+      <path d="m7.5 4.27 9 5.15" />
+      <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
+      <path d="m3.3 7 8.7 5 8.7-5" />
+      <path d="M12 22V12" />
+    </svg>
+  );
+}
+
+function AlertTriangleIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+      <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+      <path d="M12 9v4" />
+      <path d="M12 17h.01" />
+    </svg>
+  );
+}
+
+function RouteIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="6" cy="19" r="3" />
+      <path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15" />
+      <circle cx="18" cy="5" r="3" />
+    </svg>
+  );
+}
+
 // ─── Sub-components ─────────────────────────────────────────
 
-function StatCard({ icon, label, value, accentColor }) {
+function KpiCard({ icon, label, value, accentColor, onClick, isActive, loading }) {
   return (
-    <div className="stat-card flex items-center gap-3">
-      <div
-        className="w-11 h-11 rounded-xl flex items-center justify-center text-lg shrink-0"
-        style={{ background: `${accentColor}15`, color: accentColor }}
-      >
-        {icon}
-      </div>
-      <div className="min-w-0">
-        <p className="text-xs text-[var(--color-text-muted)] truncate font-medium">{label}</p>
-        <p className="text-2xl font-extrabold text-[var(--color-text-primary)] tracking-tight">{value}</p>
+    <div
+      className={`kpi-card ${onClick ? 'kpi-card--clickable' : ''} ${isActive ? 'kpi-card--active' : ''}`}
+      style={{ '--kpi-accent': accentColor }}
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } } : undefined}
+      aria-label={onClick ? `${label}: ${value}. Click to filter.` : undefined}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div
+          className="kpi-card__icon"
+          style={{ background: `${accentColor}15`, color: accentColor }}
+        >
+          {icon}
+        </div>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <p className="kpi-card__label">{label}</p>
+          {loading ? (
+            <div style={{ paddingTop: 4 }}>
+              <div className="animate-shimmer" style={{ width: 48, height: 24, borderRadius: 6 }} />
+            </div>
+          ) : (
+            <p className="kpi-card__value">{value}</p>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -136,7 +196,7 @@ function SelectedOrderPanel({ route, onClose }) {
       aria-label="Selected order details"
     >
       <div className="flex items-center justify-between mb-3">
-        <h4 className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">
+        <h4 className="section-title">
           Order Details
         </h4>
         <button
@@ -151,24 +211,24 @@ function SelectedOrderPanel({ route, onClose }) {
       </div>
 
       {/* Order ID */}
-      <p className="text-[10px] font-mono text-[var(--color-text-muted)] mb-2 truncate">
+      <p className="text-mono mb-2 truncate">
         {route.orderId}
       </p>
 
       {/* Summary stats */}
       <div className="grid grid-cols-2 gap-2 mb-3">
         <div className="rounded-lg bg-[var(--color-bg-primary)] border border-[var(--color-border-subtle)] p-2 text-center">
-          <p className="text-xs text-[var(--color-text-muted)]">Shipments</p>
-          <p className="text-sm font-bold text-[var(--color-text-primary)]">{shipments.length}</p>
+          <p className="text-label">Shipments</p>
+          <p className="text-value">{shipments.length}</p>
         </div>
         <div className="rounded-lg bg-[var(--color-bg-primary)] border border-[var(--color-border-subtle)] p-2 text-center">
-          <p className="text-xs text-[var(--color-text-muted)]">Total Cost</p>
-          <p className="text-sm font-bold text-[var(--color-accent)]">₹{totalCost.toFixed(2)}</p>
+          <p className="text-label">Total Cost</p>
+          <p className="text-value" style={{ color: 'var(--color-accent)' }}>₹{totalCost.toFixed(2)}</p>
         </div>
       </div>
 
       {isSplit && (
-        <span className="inline-block mb-3 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[var(--color-warning-glow)] text-[var(--color-warning)] uppercase">
+        <span className="badge badge--warning mb-3" style={{ display: 'inline-flex' }}>
           Split Shipment
         </span>
       )}
@@ -189,7 +249,7 @@ function SelectedOrderPanel({ route, onClose }) {
                 {s.warehouseName || 'Unknown'}
               </span>
               {s.boxSize && (
-                <span className="ml-auto text-[10px] text-[var(--color-accent)] font-semibold">
+                <span className="ml-auto badge badge--accent">
                   📦 {s.boxSize}
                 </span>
               )}
@@ -221,11 +281,12 @@ function SkeletonMap() {
 
 function SkeletonStats() {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       {[1, 2, 3, 4].map((i) => (
         <div
           key={i}
-          className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-card)] p-4 h-[72px] animate-shimmer"
+          className="kpi-card animate-shimmer"
+          style={{ height: 80 }}
           role="status"
         >
           <span className="sr-only">Loading stats…</span>
@@ -397,6 +458,7 @@ export default function ControlTowerDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedRoute, setSelectedRoute] = useState(null);
+  const [highlightLowStock, setHighlightLowStock] = useState(false);
 
   /** Fetch warehouse data (detailed inventory) and map data (routes). */
   const fetchData = useCallback(async () => {
@@ -456,6 +518,40 @@ export default function ControlTowerDashboard() {
     map.on('load', () => {
       addMarkers(map, warehouses);
       addRoutes(map, routes);
+
+      // Add route click handler for all route layers
+      map.on('click', (e) => {
+        const features = map.queryRenderedFeatures(e.point, {
+          layers: map.getStyle().layers
+            .filter((l) => l.id.startsWith('route-') && l.id.endsWith('-line'))
+            .map((l) => l.id),
+        });
+        if (features.length > 0) {
+          // Extract route index from layer id (route-{routeIdx}-{shipIdx}-line)
+          const layerId = features[0].layer.id;
+          const match = layerId.match(/route-(\d+)-/);
+          if (match) {
+            const routeIdx = parseInt(match[1], 10);
+            if (routes[routeIdx]) {
+              setSelectedRoute(routes[routeIdx]);
+            }
+          }
+        }
+      });
+
+      // Change cursor on route hover
+      const routeLayerIds = map.getStyle().layers
+        .filter((l) => l.id.startsWith('route-') && l.id.endsWith('-line'))
+        .map((l) => l.id);
+
+      routeLayerIds.forEach((layerId) => {
+        map.on('mouseenter', layerId, () => {
+          map.getCanvas().style.cursor = 'pointer';
+        });
+        map.on('mouseleave', layerId, () => {
+          map.getCanvas().style.cursor = '';
+        });
+      });
     });
 
     mapRef.current = map;
@@ -602,6 +698,17 @@ export default function ControlTowerDashboard() {
     });
   }
 
+  /** Fit map bounds to all markers */
+  function handleFitBounds() {
+    if (!mapRef.current || warehouses.length === 0) return;
+    const bounds = new maplibregl.LngLatBounds();
+    warehouses.forEach((wh) => bounds.extend([wh.lng, wh.lat]));
+    routes.forEach((route) => {
+      if (route.customer) bounds.extend([route.customer.lng, route.customer.lat]);
+    });
+    mapRef.current.fitBounds(bounds, { padding: 60, maxZoom: 8, duration: 800 });
+  }
+
   // ─── Computed stats ─────────────────────────────────────
   const activeWarehouses = warehouses.filter((w) => w.active).length;
   const totalSkus = new Set(warehouses.flatMap((w) => (w.inventory || []).map((i) => i.sku))).size;
@@ -621,21 +728,33 @@ export default function ControlTowerDashboard() {
         </p>
       </div>
 
-      {/* Quick Stats */}
+      {/* KPI Stats */}
       {loading ? (
         <SkeletonStats />
       ) : !error && warehouses.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard icon="🏭" label="Active Warehouses" value={activeWarehouses} accentColor="var(--color-accent)" />
-          <StatCard icon="📦" label="SKUs Tracked" value={totalSkus} accentColor="var(--color-success)" />
-          <StatCard
-            icon="⚠️"
+          <KpiCard
+            icon={<WarehouseIcon />}
+            label="Active Warehouses"
+            value={activeWarehouses}
+            accentColor="var(--color-accent)"
+          />
+          <KpiCard
+            icon={<PackageIcon />}
+            label="SKUs Tracked"
+            value={totalSkus}
+            accentColor="var(--color-success)"
+          />
+          <KpiCard
+            icon={<AlertTriangleIcon />}
             label="Low Stock Alerts"
             value={lowStockCount}
             accentColor={lowStockCount > 0 ? 'var(--color-warning)' : 'var(--color-success)'}
+            onClick={() => setHighlightLowStock((prev) => !prev)}
+            isActive={highlightLowStock}
           />
-          <StatCard
-            icon="🛤️"
+          <KpiCard
+            icon={<RouteIcon />}
             label="Active Routes"
             value={activeRoutes}
             accentColor="var(--color-accent)"
@@ -661,8 +780,55 @@ export default function ControlTowerDashboard() {
           </div>
         ) : (
           <>
+          {/* Map Section Header */}
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="section-title flex items-center gap-2">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 6.75V15m6-6v8.25m.503 3.498 4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 0 0-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0Z" />
+              </svg>
+              Network Map
+            </h2>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleFitBounds}
+                className="btn-ghost text-xs flex items-center gap-1"
+                aria-label="Fit map to all markers"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
+                </svg>
+                Fit All
+              </button>
+              <button
+                onClick={fetchData}
+                className="btn-ghost text-xs flex items-center gap-1"
+                aria-label="Refresh map data"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182" />
+                </svg>
+                Refresh
+              </button>
+            </div>
+          </div>
+
+          {/* Low stock filter indicator */}
+          {highlightLowStock && lowStockCount > 0 && (
+            <div className="mb-3 flex items-center gap-2 animate-fade-in">
+              <span className="badge badge--warning">
+                Showing {lowStockCount} low-stock warehouse{lowStockCount !== 1 ? 's' : ''}
+              </span>
+              <button
+                onClick={() => setHighlightLowStock(false)}
+                className="text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] transition-colors"
+              >
+                Clear filter
+              </button>
+            </div>
+          )}
+
           <div className="relative glass-card overflow-hidden" style={{ minHeight: '460px' }}>
-            <div ref={mapContainerRef} className="w-full" style={{ height: '460px' }} />
+            <div ref={mapContainerRef} className="w-full" style={{ height: '500px' }} />
             <MapLegend />
             <SelectedOrderPanel route={selectedRoute} onClose={() => setSelectedRoute(null)} />
           </div>
@@ -670,9 +836,12 @@ export default function ControlTowerDashboard() {
           {/* Recent Orders List — click to select */}
           {routes.length > 0 && (
             <div className="mt-4 glass-card p-4">
-              <h3 className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3">
-                Recent Orders — click to inspect route
-              </h3>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="section-title">
+                  Recent Orders — click to inspect route
+                </h3>
+                <span className="badge badge--accent">{routes.length} order{routes.length !== 1 ? 's' : ''}</span>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-48 overflow-y-auto">
                 {routes.slice(0, 12).map((route) => {
                   const isSelected = selectedRoute?.orderId === route.orderId;

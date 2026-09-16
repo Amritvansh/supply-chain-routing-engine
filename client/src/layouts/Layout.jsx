@@ -1,15 +1,15 @@
 /**
- * Layout — Collapsible sidebar drawer + full-width main content
+ * Layout — Persistent sidebar (desktop) + overlay drawer (mobile)
  *
  * Architecture:
- *   - Main content ALWAYS takes full viewport width (no margin offsets)
- *   - Sidebar is an overlay drawer, toggled by a fixed menu button
- *   - Click menu → drawer slides in from left with backdrop
- *   - Click backdrop / nav item / escape → drawer closes
- *   - No overlap, no cutoff, no broken margin calculations
+ *   - Desktop (≥1024px): Sidebar is always visible, main content offset
+ *   - Mobile (<1024px): Sidebar is an overlay drawer with backdrop
+ *   - Health indicator shows live backend connectivity
+ *   - NavLink provides active route highlighting
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import * as api from '../lib/apiClient';
 
 const navItems = [
   {
@@ -56,6 +56,7 @@ const navItems = [
 
 export default function Layout() {
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [healthStatus, setHealthStatus] = useState('unknown'); // unknown | healthy | unhealthy
   const location = useLocation();
 
   // Close drawer on route change
@@ -74,9 +75,26 @@ export default function Layout() {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [drawerOpen]);
 
+  // Health check on mount
+  const checkHealth = useCallback(async () => {
+    try {
+      await api.getHealth();
+      setHealthStatus('healthy');
+    } catch {
+      setHealthStatus('unhealthy');
+    }
+  }, []);
+
+  useEffect(() => {
+    checkHealth();
+    // Re-check every 60 seconds
+    const interval = setInterval(checkHealth, 60000);
+    return () => clearInterval(interval);
+  }, [checkHealth]);
+
   return (
-    <div style={{ minHeight: '100vh' }}>
-      {/* ─── Fixed Menu Toggle Button ──────────────────── */}
+    <div className="layout-root" style={{ minHeight: '100vh' }}>
+      {/* ─── Fixed Menu Toggle Button (mobile only) ────── */}
       <button
         onClick={() => setDrawerOpen((prev) => !prev)}
         className="menu-toggle-btn"
@@ -95,14 +113,14 @@ export default function Layout() {
         )}
       </button>
 
-      {/* ─── Backdrop (visible when drawer is open) ──── */}
+      {/* ─── Backdrop (mobile only, visible when drawer is open) ── */}
       <div
         className={`drawer-backdrop ${drawerOpen ? 'drawer-backdrop--visible' : ''}`}
         onClick={() => setDrawerOpen(false)}
         aria-hidden="true"
       />
 
-      {/* ─── Sidebar Drawer ────────────────────────────── */}
+      {/* ─── Sidebar ───────────────────────────────────────── */}
       <aside
         className={`sidebar-drawer ${drawerOpen ? 'sidebar-drawer--open' : ''}`}
       >
@@ -160,22 +178,47 @@ export default function Layout() {
           </div>
         </nav>
 
-        {/* Footer */}
+        {/* Footer with Health Status */}
         <div style={{ padding: '16px 20px', borderTop: '1px solid var(--color-border)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+          {/* Backend connectivity */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <div
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: '50%',
+                background: healthStatus === 'healthy'
+                  ? 'var(--color-success)'
+                  : healthStatus === 'unhealthy'
+                  ? 'var(--color-danger)'
+                  : 'var(--color-text-muted)',
+                boxShadow: healthStatus === 'healthy'
+                  ? '0 0 8px rgba(52,211,153,0.5)'
+                  : healthStatus === 'unhealthy'
+                  ? '0 0 8px rgba(248,113,113,0.5)'
+                  : 'none',
+                transition: 'all 0.3s ease',
+              }}
+            />
+            <p style={{ fontSize: 10, color: 'var(--color-text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              {healthStatus === 'healthy' ? 'Systems Online' : healthStatus === 'unhealthy' ? 'Backend Offline' : 'Checking…'}
+            </p>
+          </div>
+          {/* Architecture badge */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-success)', boxShadow: '0 0 8px rgba(52,211,153,0.5)' }} />
             <p style={{ fontSize: 10, color: 'var(--color-text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               Hybrid Architecture
             </p>
           </div>
-          <p style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>
+          <p style={{ fontSize: 10, color: 'var(--color-text-muted)', marginTop: 4, paddingLeft: 14 }}>
             Deterministic Core + Async AI
           </p>
         </div>
       </aside>
 
-      {/* ─── Main Content (ALWAYS full width) ──────────── */}
-      <main style={{ minHeight: '100vh', paddingTop: 0 }}>
+      {/* ─── Main Content ──────────────────────────────────── */}
+      <main className="layout-main" style={{ minHeight: '100vh', paddingTop: 0 }}>
         <div style={{ padding: '32px', maxWidth: 1400, margin: '0 auto' }}>
           <Outlet />
         </div>
