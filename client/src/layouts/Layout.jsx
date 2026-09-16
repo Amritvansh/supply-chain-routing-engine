@@ -214,6 +214,9 @@ export default function Layout() {
           <p style={{ fontSize: 10, color: 'var(--color-text-muted)', marginTop: 4, paddingLeft: 14 }}>
             Deterministic Core + Async AI
           </p>
+          <p style={{ fontSize: 9, color: 'var(--color-text-muted)', marginTop: 8, paddingLeft: 14, opacity: 0.6 }}>
+            v1.0 — College Major Project
+          </p>
         </div>
       </aside>
 
