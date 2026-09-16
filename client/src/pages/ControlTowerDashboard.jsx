@@ -186,12 +186,13 @@ function SelectedOrderPanel({ route, onClose }) {
   if (!route) return null;
   const shipments = route.shipments || [];
   const totalCost = shipments.reduce((sum, s) => sum + parseFloat(s.totalCost || 0), 0);
+  const totalDistance = shipments.reduce((sum, s) => sum + parseFloat(s.distanceKm || 0), 0);
   const isSplit = shipments.length > 1;
 
   return (
     <div
       className="absolute top-4 right-14 z-10 glass-card p-4 animate-fade-in"
-      style={{ width: 280 }}
+      style={{ width: 300 }}
       role="region"
       aria-label="Selected order details"
     >
@@ -210,13 +211,25 @@ function SelectedOrderPanel({ route, onClose }) {
         </button>
       </div>
 
-      {/* Order ID */}
-      <p className="text-mono mb-2 truncate">
-        {route.orderId}
-      </p>
+      {/* Order ID + Status */}
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-mono truncate" style={{ maxWidth: 180 }}>
+          {route.orderId}
+        </p>
+        <span className={`badge ${route.status === 'SPLIT' ? 'badge--warning' : route.status === 'FAILED' ? 'badge--danger' : 'badge--success'}`}>
+          {route.status || 'ROUTED'}
+        </span>
+      </div>
+
+      {/* Timestamp */}
+      {route.createdAt && (
+        <p className="text-[10px] text-[var(--color-text-muted)] mb-3">
+          {new Date(route.createdAt).toLocaleString()}
+        </p>
+      )}
 
       {/* Summary stats */}
-      <div className="grid grid-cols-2 gap-2 mb-3">
+      <div className="grid grid-cols-3 gap-2 mb-3">
         <div className="rounded-lg bg-[var(--color-bg-primary)] border border-[var(--color-border-subtle)] p-2 text-center">
           <p className="text-label">Shipments</p>
           <p className="text-value">{shipments.length}</p>
@@ -225,11 +238,15 @@ function SelectedOrderPanel({ route, onClose }) {
           <p className="text-label">Total Cost</p>
           <p className="text-value" style={{ color: 'var(--color-accent)' }}>₹{totalCost.toFixed(2)}</p>
         </div>
+        <div className="rounded-lg bg-[var(--color-bg-primary)] border border-[var(--color-border-subtle)] p-2 text-center">
+          <p className="text-label">Distance</p>
+          <p className="text-value">{totalDistance.toFixed(1)} km</p>
+        </div>
       </div>
 
       {isSplit && (
         <span className="badge badge--warning mb-3" style={{ display: 'inline-flex' }}>
-          Split Shipment
+          Split Shipment — routed from {shipments.length} warehouses
         </span>
       )}
 
@@ -471,7 +488,25 @@ export default function ControlTowerDashboard() {
         api.getMapData().catch(() => ({ warehouses: [], routes: [] })),
       ]);
 
-      setWarehouses(warehouseData.warehouses || []);
+      // Merge inventory data from getWarehouses into map-data warehouses
+      // so popups have detailed SKU inventory even from map-data source
+      const inventoryMap = new Map();
+      (warehouseData.warehouses || []).forEach((w) => {
+        inventoryMap.set(w.id, w);
+      });
+
+      const enrichedWarehouses = (warehouseData.warehouses || []).map((w) => {
+        // If map-data has health info for this warehouse, merge it
+        const mapWh = (mapData.warehouses || []).find((mw) => mw.id === w.id);
+        return {
+          ...w,
+          totalStock: mapWh?.totalStock ?? undefined,
+          lowStockSkus: mapWh?.lowStockSkus ?? undefined,
+          healthStatus: mapWh?.healthStatus ?? undefined,
+        };
+      });
+
+      setWarehouses(enrichedWarehouses.length > 0 ? enrichedWarehouses : warehouseData.warehouses || []);
       setRoutes(mapData.routes || []);
     } catch (err) {
       setError(err.message || 'Unable to connect to the server. Check that the backend is running.');
@@ -828,7 +863,7 @@ export default function ControlTowerDashboard() {
           )}
 
           <div className="relative glass-card overflow-hidden" style={{ minHeight: '460px' }}>
-            <div ref={mapContainerRef} className="w-full" style={{ height: '500px' }} />
+            <div ref={mapContainerRef} className="w-full" style={{ height: 'clamp(400px, 50vh, 600px)' }} />
             <MapLegend />
             <SelectedOrderPanel route={selectedRoute} onClose={() => setSelectedRoute(null)} />
           </div>
