@@ -88,18 +88,18 @@ function KpiCard({ icon, label, value, accentColor, onClick, isActive, loading }
       onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } } : undefined}
       aria-label={onClick ? `${label}: ${value}. Click to filter.` : undefined}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div className="flex items-center gap-3">
         <div
           className="kpi-card__icon"
-          style={{ background: `${accentColor}15`, color: accentColor }}
+          style={{ background: `color-mix(in srgb, ${accentColor} 10%, transparent)`, color: accentColor }}
         >
           {icon}
         </div>
-        <div style={{ minWidth: 0, flex: 1 }}>
+        <div className="min-w-0 flex-1">
           <p className="kpi-card__label">{label}</p>
           {loading ? (
-            <div style={{ paddingTop: 4 }}>
-              <div className="animate-shimmer" style={{ width: 48, height: 24, borderRadius: 6 }} />
+            <div className="pt-1">
+              <div className="animate-shimmer" style={{ width: 48, height: 20, borderRadius: 4 }} />
             </div>
           ) : (
             <p className="kpi-card__value">{value}</p>
@@ -754,12 +754,12 @@ export default function ControlTowerDashboard() {
   return (
     <div className="animate-fade-in">
       {/* Page Header */}
-      <div className="mb-8">
-        <h1 className="page-title mb-2">
+      <div className="mb-6">
+        <h1 className="page-title">
           Control Tower
         </h1>
-        <p className="page-subtitle">
-          Real-time warehouse and shipment monitoring dashboard
+        <p className="page-subtitle mt-1">
+          Real-time warehouse and shipment monitoring
         </p>
       </div>
 
@@ -872,8 +872,8 @@ export default function ControlTowerDashboard() {
           {routes.length > 0 && (
             <div className="mt-4 glass-card p-4">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="section-title">
-                  Recent Orders — click to inspect route
+              <h3 className="section-title">
+                  Recent Orders
                 </h3>
                 <span className="badge badge--accent">{routes.length} order{routes.length !== 1 ? 's' : ''}</span>
               </div>
