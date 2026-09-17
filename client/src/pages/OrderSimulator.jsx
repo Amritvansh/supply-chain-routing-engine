@@ -388,9 +388,9 @@ function ProductCard({ product, onAddToCart, cartQty }) {
               style={{ width: `${product.totalAvailable > 0 ? Math.max(8, stockPct) : 0}%` }}
             />
           </div>
-          <span className="os-product-card__stock-text">
+          <span className="os-product-card__stock-text" title={product.totalAvailable > 0 ? `${product.totalAvailable} units across ${product.warehouseCount} warehouse${product.warehouseCount !== 1 ? 's' : ''}` : 'Currently out of stock'}>
             {product.totalAvailable > 0
-              ? `${product.totalAvailable} · ${product.warehouseCount} wh`
+              ? `${product.totalAvailable} · ${product.warehouseCount} warehouse${product.warehouseCount !== 1 ? 's' : ''}`
               : 'Out of stock'}
           </span>
         </div>
@@ -400,6 +400,7 @@ function ProductCard({ product, onAddToCart, cartQty }) {
           onClick={() => onAddToCart(product)}
           disabled={product.totalAvailable <= 0}
           className={`os-product-card__add-btn ${inCart ? 'os-product-card__add-btn--added' : ''}`}
+          aria-label={inCart ? `${product.name} added to cart (${cartQty})` : `Add ${product.name} to cart`}
           id={`add-to-cart-${product.sku}`}
         >
           {inCart ? <><IconCheck /> Added</> : <><IconPlus /> Add to Cart</>}
@@ -476,6 +477,8 @@ function CityPill({ city, isSelected, onClick }) {
     <button
       onClick={onClick}
       className={`os-city-pill ${isSelected ? 'os-city-pill--selected' : ''}`}
+      aria-label={`Deliver to ${city.name} (${city.lat}°N, ${city.lng}°E)`}
+      aria-pressed={isSelected}
       id={`city-${city.name.toLowerCase()}`}
     >
       <span className="os-city-pill__icon">{city.icon}</span>
