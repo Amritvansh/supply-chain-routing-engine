@@ -311,69 +311,100 @@ function HybridDemoPanel({ checkoutDone, checkoutTimestamp, explanationDone, exp
   );
 }
 
+// ─── Step Flow Indicator ────────────────────────────────────
+
+function ShoppingFlowIndicator({ hasLocation, hasItems, isCheckingOut }) {
+  const steps = [
+    { label: 'Location', done: hasLocation, active: !hasLocation },
+    { label: 'Products', done: hasItems, active: hasLocation && !hasItems },
+    { label: 'Cart', done: hasItems && hasLocation, active: hasItems && hasLocation && !isCheckingOut },
+    { label: 'Checkout', done: isCheckingOut, active: hasItems && hasLocation },
+  ];
+
+  return (
+    <div className="os-flow">
+      {steps.map((step, i) => (
+        <span key={step.label}>
+          <span className={`os-flow__step ${step.done ? 'os-flow__step--done' : step.active ? 'os-flow__step--active' : ''}`}>
+            <span className="os-flow__dot" />
+            {step.label}
+          </span>
+          {i < steps.length - 1 && <span className="os-flow__sep" />}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+// ─── Skeleton Product Card ──────────────────────────────────
+
+function SkeletonProductCard() {
+  return (
+    <div className="os-skeleton-card">
+      <div className="os-skeleton-card__img" />
+      <div className="os-skeleton-card__body">
+        <div className="os-skeleton-bar" style={{ width: '70%' }} />
+        <div className="os-skeleton-bar" style={{ width: '40%' }} />
+        <div className="os-skeleton-bar" style={{ width: '100%', marginTop: 12 }} />
+        <div className="os-skeleton-bar" style={{ width: '100%', height: 36, marginTop: 12 }} />
+      </div>
+    </div>
+  );
+}
+
 /** Product card in the catalog grid */
 function ProductCard({ product, onAddToCart, cartQty }) {
   const inCart = cartQty > 0;
+  const stockPct = Math.min(100, (product.totalAvailable / 100) * 100);
+  const stockLevel = product.totalAvailable > 20 ? 'high' : product.totalAvailable > 0 ? 'mid' : 'low';
 
   return (
     <div
-      className={`glass-card p-4 transition-all duration-300 ${inCart ? 'animate-border-glow' : ''}`}
-      style={{
-        borderColor: inCart ? 'rgba(99, 102, 241, 0.3)' : undefined,
-      }}
+      className={`os-product-card ${inCart ? 'os-product-card--in-cart' : ''}`}
       id={`product-card-${product.sku}`}
     >
-      {/* Icon + Badge */}
-      <div className="flex items-start justify-between mb-3">
-        <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl" style={{ background: 'var(--color-accent-glow)' }}>
-          {getSkuIcon(product.sku)}
-        </div>
+      {/* Image Area */}
+      <div className="os-product-card__img">
+        {getSkuIcon(product.sku)}
         {inCart && (
-          <span className="badge badge--accent animate-fade-in-scale">
-            {cartQty} in cart
+          <span className="os-product-card__cart-badge">
+            ✓ {cartQty} in cart
           </span>
         )}
       </div>
 
-      {/* Product Info */}
-      <h3 className="text-sm font-semibold text-[var(--color-text-primary)] mb-1 truncate" title={product.name}>
-        {product.name}
-      </h3>
-      <p className="text-[10px] font-mono text-[var(--color-text-muted)] mb-3">
-        {product.sku}
-      </p>
+      {/* Body */}
+      <div className="os-product-card__body">
+        <h3 className="os-product-card__name" title={product.name}>
+          {product.name}
+        </h3>
+        <span className="os-product-card__sku">{product.sku}</span>
 
-      {/* Stock Indicator */}
-      <div className="flex items-center gap-1.5 mb-3">
-        <div
-          className="w-1.5 h-1.5 rounded-full"
-          style={{
-            background: product.totalAvailable > 20 ? 'var(--color-success)' : product.totalAvailable > 0 ? 'var(--color-warning)' : 'var(--color-danger)',
-          }}
-        />
-        <span className="text-[11px] text-[var(--color-text-muted)]">
-          {product.totalAvailable > 0
-            ? `${product.totalAvailable} available across ${product.warehouseCount} warehouse${product.warehouseCount !== 1 ? 's' : ''}`
-            : 'Out of stock'}
-        </span>
+        {/* Stock Bar */}
+        <div className="os-product-card__stock">
+          <div className="os-product-card__stock-bar">
+            <div
+              className={`os-product-card__stock-fill os-product-card__stock-fill--${stockLevel}`}
+              style={{ width: `${product.totalAvailable > 0 ? Math.max(8, stockPct) : 0}%` }}
+            />
+          </div>
+          <span className="os-product-card__stock-text">
+            {product.totalAvailable > 0
+              ? `${product.totalAvailable} · ${product.warehouseCount} wh`
+              : 'Out of stock'}
+          </span>
+        </div>
+
+        {/* Add to Cart Button */}
+        <button
+          onClick={() => onAddToCart(product)}
+          disabled={product.totalAvailable <= 0}
+          className={`os-product-card__add-btn ${inCart ? 'os-product-card__add-btn--added' : ''}`}
+          id={`add-to-cart-${product.sku}`}
+        >
+          {inCart ? <><IconCheck /> Added</> : <><IconPlus /> Add to Cart</>}
+        </button>
       </div>
-
-      {/* Add to Cart Button */}
-      <button
-        onClick={() => onAddToCart(product)}
-        disabled={product.totalAvailable <= 0}
-        className="w-full py-2 rounded-lg text-xs font-semibold transition-all duration-200 flex items-center justify-center gap-1.5"
-        style={{
-          background: inCart ? 'var(--color-accent)' : 'var(--color-accent-glow)',
-          color: inCart ? 'white' : 'var(--color-accent)',
-          border: inCart ? 'none' : '1px solid rgba(99, 102, 241, 0.2)',
-          cursor: product.totalAvailable <= 0 ? 'not-allowed' : 'pointer',
-          opacity: product.totalAvailable <= 0 ? 0.4 : 1,
-        }}
-        id={`add-to-cart-${product.sku}`}
-      >
-        {inCart ? <><IconCheck /> Added</> : <><IconPlus /> Add to Cart</>}
-      </button>
     </div>
   );
 }
@@ -381,24 +412,24 @@ function ProductCard({ product, onAddToCart, cartQty }) {
 /** Cart item row */
 function CartItem({ item, onUpdateQty, onRemove }) {
   return (
-    <div className="flex items-center gap-3 py-3 animate-fade-in" id={`cart-item-${item.sku}`}>
+    <div className="os-cart-item animate-fade-in" id={`cart-item-${item.sku}`}>
       {/* Icon */}
-      <div className="w-10 h-10 rounded-lg flex items-center justify-center text-lg shrink-0" style={{ background: 'var(--color-accent-glow)' }}>
+      <div className="os-cart-item__icon">
         {getSkuIcon(item.sku)}
       </div>
 
       {/* Info */}
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-[var(--color-text-primary)] truncate">{item.name}</p>
-        <p className="text-[10px] font-mono text-[var(--color-text-muted)]">{item.sku}</p>
+      <div className="os-cart-item__info">
+        <p className="os-cart-item__name">{item.name}</p>
+        <p className="os-cart-item__sku">{item.sku}</p>
       </div>
 
-      {/* Quantity Controls */}
-      <div className="flex items-center gap-1">
+      {/* Quantity Stepper */}
+      <div className="os-qty-stepper">
         <button
           onClick={() => onUpdateQty(item.sku, item.qty - 1)}
           disabled={item.qty <= 1}
-          className="w-7 h-7 rounded-md flex items-center justify-center border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-accent)] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          className="os-qty-stepper__btn"
           aria-label={`Decrease quantity of ${item.name}`}
           id={`qty-minus-${item.sku}`}
         >
@@ -413,13 +444,12 @@ function CartItem({ item, onUpdateQty, onRemove }) {
             const val = parseInt(e.target.value, 10);
             if (!isNaN(val) && val >= 1) onUpdateQty(item.sku, val);
           }}
-          className="w-12 h-7 text-center text-sm font-semibold rounded-md"
-          style={{ background: 'var(--color-bg-input)', border: '1px solid var(--color-border)', color: 'var(--color-text-primary)' }}
+          className="os-qty-stepper__value"
           id={`qty-input-${item.sku}`}
         />
         <button
           onClick={() => onUpdateQty(item.sku, item.qty + 1)}
-          className="w-7 h-7 rounded-md flex items-center justify-center border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-accent)] hover:border-[var(--color-accent)] transition-colors"
+          className="os-qty-stepper__btn"
           aria-label={`Increase quantity of ${item.name}`}
           id={`qty-plus-${item.sku}`}
         >
@@ -430,7 +460,7 @@ function CartItem({ item, onUpdateQty, onRemove }) {
       {/* Remove */}
       <button
         onClick={() => onRemove(item.sku)}
-        className="w-7 h-7 rounded-md flex items-center justify-center text-[var(--color-text-muted)] hover:text-[var(--color-danger)] hover:bg-[var(--color-danger-glow)] transition-all"
+        className="os-cart-remove"
         aria-label={`Remove ${item.name} from cart`}
         id={`remove-item-${item.sku}`}
       >
@@ -440,21 +470,17 @@ function CartItem({ item, onUpdateQty, onRemove }) {
   );
 }
 
-/** City selector pill */
+/** City selector card */
 function CityPill({ city, isSelected, onClick }) {
   return (
     <button
       onClick={onClick}
-      className={`px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200 border flex items-center gap-1.5 ${
-        isSelected
-          ? 'bg-[var(--color-accent)] text-white border-[var(--color-accent)] shadow-lg'
-          : 'bg-[var(--color-bg-input)] text-[var(--color-text-secondary)] border-[var(--color-border)] hover:border-[var(--color-accent)] hover:text-[var(--color-text-primary)]'
-      }`}
-      style={isSelected ? { boxShadow: '0 4px 14px rgba(99, 102, 241, 0.3)' } : undefined}
+      className={`os-city-pill ${isSelected ? 'os-city-pill--selected' : ''}`}
       id={`city-${city.name.toLowerCase()}`}
     >
-      <span>{city.icon}</span>
-      <span>{city.name}</span>
+      <span className="os-city-pill__icon">{city.icon}</span>
+      <span className="os-city-pill__name">{city.name}</span>
+      <span className="os-city-pill__coords">{city.lat}°N, {city.lng}°E</span>
     </button>
   );
 }
@@ -714,42 +740,39 @@ export default function OrderSimulator() {
     <div className="animate-fade-in">
       {/* Page Header */}
       <div className="mb-6">
-        <h1 className="page-title mb-2">
+        <h1 className="page-title mb-1">
           Order Simulator
         </h1>
-        <p className="page-subtitle">
+        <p className="page-subtitle mb-4">
           Browse products, build your cart, and experience the hybrid routing engine
         </p>
+        {activeTab === 'checkout' && checkoutState !== 'success' && (
+          <ShoppingFlowIndicator
+            hasLocation={!!getCustomerCoords()}
+            hasItems={cart.length > 0}
+            isCheckingOut={checkoutState === 'loading'}
+          />
+        )}
       </div>
 
       {/* ─── Tab Switcher ─── */}
-      <div className="flex items-center gap-2 mb-6">
+      <div className="os-tab-bar mb-6" style={{ display: 'inline-flex' }}>
         <button
           onClick={() => setActiveTab('checkout')}
-          className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 flex items-center gap-2 ${
-            activeTab === 'checkout'
-              ? 'bg-[var(--color-accent)] text-white shadow-lg'
-              : 'bg-[var(--color-bg-hover)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'
-          }`}
-          style={activeTab === 'checkout' ? { boxShadow: '0 4px 14px rgba(99, 102, 241, 0.3)' } : undefined}
+          className={`os-tab ${activeTab === 'checkout' ? 'os-tab--active' : ''}`}
           id="tab-checkout"
         >
           <IconCart />
           Checkout
           {cartItemCount > 0 && (
-            <span className="w-5 h-5 rounded-full bg-white/20 text-[10px] font-bold flex items-center justify-center">
+            <span className="os-tab__badge">
               {cartItemCount}
             </span>
           )}
         </button>
         <button
           onClick={() => setActiveTab('flash')}
-          className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 flex items-center gap-2 ${
-            activeTab === 'flash'
-              ? 'bg-[var(--color-warning)] text-[var(--color-bg-primary)] shadow-lg'
-              : 'bg-[var(--color-bg-hover)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'
-          }`}
-          style={activeTab === 'flash' ? { boxShadow: '0 4px 14px rgba(251, 191, 36, 0.3)' } : undefined}
+          className={`os-tab os-tab--flash ${activeTab === 'flash' ? 'os-tab--active' : ''}`}
           id="tab-flash"
         >
           <IconFlash />
@@ -764,22 +787,19 @@ export default function OrderSimulator() {
           {checkoutState === 'success' && checkoutResult ? (
             <div className="space-y-6 animate-fade-in">
               {/* ─── Order Confirmation ─── */}
-              <SectionCard className="animate-fade-in">
-                <div className="flex items-center justify-between mb-5">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold" style={{ background: 'var(--color-success-glow)', color: 'var(--color-success)' }}>
-                      ✓
-                    </div>
-                    <div>
-                      <h2 className="text-base font-semibold text-[var(--color-success)]">
-                        {isReplay ? 'Order Retrieved (Idempotent Replay)' : 'Order Confirmed & Routed'}
-                      </h2>
-                      <p className="text-[11px] text-[var(--color-text-muted)] font-mono">
-                        {orderId}
-                      </p>
-                    </div>
+              <div className="glass-card overflow-hidden animate-fade-in">
+                {/* Success Header */}
+                <div className="os-result-header">
+                  <div className="os-result-header__check">✓</div>
+                  <div className="flex-1 min-w-0">
+                    <h2 className="text-base font-semibold text-[var(--color-success)]">
+                      {isReplay ? 'Order Retrieved (Idempotent Replay)' : 'Order Confirmed & Routed'}
+                    </h2>
+                    <p className="text-[11px] text-[var(--color-text-muted)] font-mono">
+                      {orderId}
+                    </p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 shrink-0">
                     {isReplay && (
                       <span className="badge badge--neutral">Replay</span>
                     )}
@@ -790,28 +810,28 @@ export default function OrderSimulator() {
                 </div>
 
                 {/* Order Meta */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
-                  <div className="rounded-lg p-3" style={{ background: 'var(--color-bg-primary)' }}>
-                    <p className="text-[10px] text-[var(--color-text-muted)] uppercase font-semibold tracking-wider mb-1">Customer Location</p>
-                    <p className="text-sm font-medium text-[var(--color-text-primary)]">
+                <div className="os-result-meta">
+                  <div className="os-result-meta__item">
+                    <p className="os-result-meta__label">Customer Location</p>
+                    <p className="os-result-meta__value">
                       {selectedCity && selectedCity !== 'custom' ? selectedCity : `${checkoutResult.order?.customer_lat}°, ${checkoutResult.order?.customer_lng}°`}
                     </p>
                   </div>
-                  <div className="rounded-lg p-3" style={{ background: 'var(--color-bg-primary)' }}>
-                    <p className="text-[10px] text-[var(--color-text-muted)] uppercase font-semibold tracking-wider mb-1">Items Ordered</p>
-                    <p className="text-sm font-medium text-[var(--color-text-primary)]">
+                  <div className="os-result-meta__item">
+                    <p className="os-result-meta__label">Items Ordered</p>
+                    <p className="os-result-meta__value">
                       {(checkoutResult.items || []).length} SKU{(checkoutResult.items || []).length !== 1 ? 's' : ''}
                     </p>
                   </div>
-                  <div className="rounded-lg p-3" style={{ background: 'var(--color-bg-primary)' }}>
-                    <p className="text-[10px] text-[var(--color-text-muted)] uppercase font-semibold tracking-wider mb-1">Shipments</p>
-                    <p className="text-sm font-medium text-[var(--color-text-primary)]">
+                  <div className="os-result-meta__item">
+                    <p className="os-result-meta__label">Shipments</p>
+                    <p className="os-result-meta__value">
                       {(checkoutResult.shipments || []).length}
                     </p>
                   </div>
-                  <div className="rounded-lg p-3" style={{ background: 'var(--color-bg-primary)' }}>
-                    <p className="text-[10px] text-[var(--color-text-muted)] uppercase font-semibold tracking-wider mb-1">Order Time</p>
-                    <p className="text-sm font-medium text-[var(--color-text-primary)]">
+                  <div className="os-result-meta__item">
+                    <p className="os-result-meta__label">Order Time</p>
+                    <p className="os-result-meta__value">
                       {checkoutResult.order?.created_at
                         ? new Date(checkoutResult.order.created_at).toLocaleTimeString()
                         : new Date(checkoutTimestamp).toLocaleTimeString()
@@ -820,161 +840,161 @@ export default function OrderSimulator() {
                   </div>
                 </div>
 
-                {/* Order Items */}
-                {(checkoutResult.items || []).length > 0 && (
-                  <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-primary)] p-4 mb-4">
-                    <h4 className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3">
-                      Ordered Items
-                    </h4>
-                    <div className="space-y-2">
-                      {checkoutResult.items.map((item, idx) => (
-                        <div key={item.id || idx} className="flex items-center gap-3">
-                          <span className="text-lg">{getSkuIcon(item.sku)}</span>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm text-[var(--color-text-primary)] font-medium">
-                              {item.skuName || item.sku}
-                            </p>
-                            <p className="text-[10px] font-mono text-[var(--color-text-muted)]">{item.sku}</p>
+                <div className="px-6 pb-6 space-y-4">
+                  {/* Order Items */}
+                  {(checkoutResult.items || []).length > 0 && (
+                    <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-primary)] p-4">
+                      <h4 className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3">
+                        Ordered Items
+                      </h4>
+                      <div className="space-y-2">
+                        {checkoutResult.items.map((item, idx) => (
+                          <div key={item.id || idx} className="flex items-center gap-3">
+                            <span className="text-lg">{getSkuIcon(item.sku)}</span>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm text-[var(--color-text-primary)] font-medium">
+                                {item.skuName || item.sku}
+                              </p>
+                              <p className="text-[10px] font-mono text-[var(--color-text-muted)]">{item.sku}</p>
+                            </div>
+                            <span className="text-sm font-semibold text-[var(--color-accent)]">
+                              ×{item.qty}
+                            </span>
                           </div>
-                          <span className="text-sm font-semibold text-[var(--color-accent)]">
-                            ×{item.qty}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Shipments */}
-                {(checkoutResult.shipments || []).map((shipment, idx) => (
-                  <div key={shipment.id || idx} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-primary)] p-4 mb-3 animate-slide-in-right" style={{ animationDelay: `${idx * 100}ms` }}>
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <IconTruck />
-                        <h4 className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">
-                          {checkoutResult.shipments.length > 1 ? `Shipment ${idx + 1} of ${checkoutResult.shipments.length}` : 'Shipment Details'}
-                        </h4>
+                        ))}
                       </div>
-                      <div className="flex items-center gap-2">
-                        {shipment.box_size && (
-                          <span className="badge badge--accent">
-                            📦 {shipment.box_size}
+                    </div>
+                  )}
+
+                  {/* Shipments */}
+                  {(checkoutResult.shipments || []).map((shipment, idx) => (
+                    <div key={shipment.id || idx} className="os-shipment-card" style={{ animationDelay: `${idx * 100}ms` }}>
+                      <div className="os-shipment-card__header">
+                        <div className="flex items-center gap-2">
+                          <IconTruck />
+                          <h4 className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">
+                            {checkoutResult.shipments.length > 1 ? `Shipment ${idx + 1} of ${checkoutResult.shipments.length}` : 'Shipment Details'}
+                          </h4>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {shipment.box_size && (
+                            <span className="badge badge--accent">
+                              📦 {shipment.box_size}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="os-shipment-card__body">
+                        <div>
+                          <p className="os-shipment-card__metric-label">Warehouse</p>
+                          <p className="os-shipment-card__metric-value">
+                            {shipment.warehouse_name || shipment.warehouse_id?.slice(0, 8) || 'N/A'}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="os-shipment-card__metric-label">Distance</p>
+                          <p className="os-shipment-card__metric-value">
+                            {parseFloat(shipment.distance_km).toFixed(1)} km
+                          </p>
+                        </div>
+                        <div>
+                          <p className="os-shipment-card__metric-label">Shipping Cost</p>
+                          <p className="os-shipment-card__metric-value">
+                            ₹{parseFloat(shipment.total_cost).toFixed(2)}
+                          </p>
+                        </div>
+                      </div>
+                      {shipment.id && (
+                        <p className="text-[10px] font-mono text-[var(--color-text-muted)] px-4 pb-3 pt-0 border-t border-[var(--color-border-subtle)]" style={{ paddingTop: 8, marginTop: -1 }}>
+                          Shipment ID: {shipment.id}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+
+                  {/* Cost Breakdown */}
+                  {checkoutResult.costBreakdown && (
+                    <div className="os-cost-breakdown">
+                      <h4 className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3">
+                        Cost Breakdown
+                      </h4>
+                      <div className="os-cost-breakdown__row">
+                        <span className="os-cost-breakdown__label">Distance Cost</span>
+                        <span className="os-cost-breakdown__value">₹{checkoutResult.costBreakdown.distanceCost?.toFixed(2)}</span>
+                      </div>
+                      <div className="os-cost-breakdown__row">
+                        <span className="os-cost-breakdown__label">Packaging Cost</span>
+                        <span className="os-cost-breakdown__value">₹{checkoutResult.costBreakdown.packagingCost?.toFixed(2)}</span>
+                      </div>
+                      <div className="os-cost-breakdown__row">
+                        <span className="os-cost-breakdown__label">Depletion Penalty</span>
+                        <span className={`os-cost-breakdown__value ${checkoutResult.costBreakdown.depletionPenalty > 0 ? 'os-cost-breakdown__value--warning' : ''}`}>
+                          ₹{checkoutResult.costBreakdown.depletionPenalty?.toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="os-cost-breakdown__row os-cost-breakdown__row--total">
+                        <span className="os-cost-breakdown__label" style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>Total Routing Cost</span>
+                        <span className="os-cost-breakdown__value os-cost-breakdown__value--accent">₹{checkoutResult.costBreakdown.totalCost?.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Packing Info */}
+                  {checkoutResult.packing && (
+                    <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-primary)] p-4">
+                      <h4 className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3">
+                        Packing Details
+                      </h4>
+                      <div className="flex flex-wrap gap-3 text-sm">
+                        <span className="badge badge--accent">
+                          {checkoutResult.packing.status === 'SPLIT_SHIPMENT' ? '📦 Split Shipment' : `📦 ${checkoutResult.packing.boxSize}`}
+                        </span>
+                        {checkoutResult.packing.totalVolumeCm3 != null && (
+                          <span className="text-[var(--color-text-muted)] text-xs flex items-center gap-1">
+                            Volume: {checkoutResult.packing.totalVolumeCm3.toLocaleString()} cm³
+                          </span>
+                        )}
+                        {checkoutResult.packing.totalWeightKg != null && (
+                          <span className="text-[var(--color-text-muted)] text-xs flex items-center gap-1">
+                            Weight: {checkoutResult.packing.totalWeightKg} kg
                           </span>
                         )}
                       </div>
                     </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
-                      <div>
-                        <span className="text-[var(--color-text-muted)] text-xs block mb-0.5">Warehouse</span>
-                        <p className="text-[var(--color-text-primary)] font-medium">
-                          {shipment.warehouse_name || shipment.warehouse_id?.slice(0, 8) || 'N/A'}
-                        </p>
-                      </div>
-                      <div>
-                        <span className="text-[var(--color-text-muted)] text-xs block mb-0.5">Distance</span>
-                        <p className="text-[var(--color-text-primary)] font-medium">
-                          {parseFloat(shipment.distance_km).toFixed(1)} km
-                        </p>
-                      </div>
-                      <div>
-                        <span className="text-[var(--color-text-muted)] text-xs block mb-0.5">Shipping Cost</span>
-                        <p className="text-[var(--color-text-primary)] font-medium">
-                          ₹{parseFloat(shipment.total_cost).toFixed(2)}
-                        </p>
-                      </div>
-                    </div>
-                    {shipment.id && (
-                      <p className="text-[10px] font-mono text-[var(--color-text-muted)] mt-2 pt-2 border-t border-[var(--color-border-subtle)]">
-                        Shipment ID: {shipment.id}
-                      </p>
-                    )}
-                  </div>
-                ))}
+                  )}
 
-                {/* Cost Breakdown */}
-                {checkoutResult.costBreakdown && (
-                  <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-primary)] p-4 mb-3">
-                    <h4 className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3">
-                      Cost Breakdown
-                    </h4>
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-[var(--color-text-muted)]">Distance Cost</span>
-                        <span className="text-[var(--color-text-primary)] font-medium">₹{checkoutResult.costBreakdown.distanceCost?.toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-[var(--color-text-muted)]">Packaging Cost</span>
-                        <span className="text-[var(--color-text-primary)] font-medium">₹{checkoutResult.costBreakdown.packagingCost?.toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-[var(--color-text-muted)]">Depletion Penalty</span>
-                        <span className={`font-medium ${checkoutResult.costBreakdown.depletionPenalty > 0 ? 'text-[var(--color-warning)]' : 'text-[var(--color-text-primary)]'}`}>
-                          ₹{checkoutResult.costBreakdown.depletionPenalty?.toFixed(2)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-sm border-t border-[var(--color-border)] pt-2 mt-1">
-                        <span className="text-[var(--color-text-primary)] font-semibold">Total Routing Cost</span>
-                        <span className="text-[var(--color-accent)] font-bold text-base">₹{checkoutResult.costBreakdown.totalCost?.toFixed(2)}</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Packing Info */}
-                {checkoutResult.packing && (
-                  <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-primary)] p-4 mb-3">
-                    <h4 className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3">
-                      Packing Details
-                    </h4>
-                    <div className="flex flex-wrap gap-3 text-sm">
-                      <span className="badge badge--accent">
-                        {checkoutResult.packing.status === 'SPLIT_SHIPMENT' ? '📦 Split Shipment' : `📦 ${checkoutResult.packing.boxSize}`}
-                      </span>
-                      {checkoutResult.packing.totalVolumeCm3 != null && (
-                        <span className="text-[var(--color-text-muted)] text-xs flex items-center gap-1">
-                          Volume: {checkoutResult.packing.totalVolumeCm3.toLocaleString()} cm³
-                        </span>
-                      )}
-                      {checkoutResult.packing.totalWeightKg != null && (
-                        <span className="text-[var(--color-text-muted)] text-xs flex items-center gap-1">
-                          Weight: {checkoutResult.packing.totalWeightKg} kg
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Alternatives */}
-                {checkoutResult.alternatives && checkoutResult.alternatives.length > 0 && (
-                  <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-primary)] p-4">
-                    <h4 className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3">
-                      Rejected Alternatives
-                    </h4>
-                    <div className="overflow-x-auto">
-                      <table className="data-table">
-                        <thead>
-                          <tr>
-                            <th>Warehouse</th>
-                            <th style={{ textAlign: 'right' }}>Distance</th>
-                            <th style={{ textAlign: 'right' }}>Penalty</th>
-                            <th style={{ textAlign: 'right' }}>Total Cost</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {checkoutResult.alternatives.map((alt, i) => (
-                            <tr key={alt.warehouseId || i}>
-                              <td className="text-[var(--color-text-secondary)]">{alt.name}</td>
-                              <td style={{ textAlign: 'right' }} className="text-[var(--color-text-muted)]">{alt.distanceKm?.toFixed(1)} km</td>
-                              <td style={{ textAlign: 'right' }} className="text-[var(--color-warning)]">₹{alt.penalty}</td>
-                              <td style={{ textAlign: 'right' }} className="text-[var(--color-text-primary)] font-medium">₹{alt.totalCost?.toFixed(2)}</td>
+                  {/* Alternatives */}
+                  {checkoutResult.alternatives && checkoutResult.alternatives.length > 0 && (
+                    <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-primary)] p-4">
+                      <h4 className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3">
+                        Rejected Alternatives
+                      </h4>
+                      <div className="overflow-x-auto">
+                        <table className="data-table">
+                          <thead>
+                            <tr>
+                              <th>Warehouse</th>
+                              <th style={{ textAlign: 'right' }}>Distance</th>
+                              <th style={{ textAlign: 'right' }}>Penalty</th>
+                              <th style={{ textAlign: 'right' }}>Total Cost</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                          </thead>
+                          <tbody>
+                            {checkoutResult.alternatives.map((alt, i) => (
+                              <tr key={alt.warehouseId || i}>
+                                <td className="text-[var(--color-text-secondary)]">{alt.name}</td>
+                                <td style={{ textAlign: 'right' }} className="text-[var(--color-text-muted)]">{alt.distanceKm?.toFixed(1)} km</td>
+                                <td style={{ textAlign: 'right' }} className="text-[var(--color-warning)]">₹{alt.penalty}</td>
+                                <td style={{ textAlign: 'right' }} className="text-[var(--color-text-primary)] font-medium">₹{alt.totalCost?.toFixed(2)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
-                  </div>
-                )}
-              </SectionCard>
+                  )}
+                </div>
+              </div>
 
               {/* Async AI Explanation — fires AFTER deterministic result */}
               <AIExplanationWidgetWrapper
@@ -1015,8 +1035,8 @@ export default function OrderSimulator() {
                     subtitle="Where should we ship your order?"
                   />
 
-                  {/* City Pills */}
-                  <div className="flex flex-wrap gap-2 mb-3">
+                  {/* City Pills Grid */}
+                  <div className="os-city-grid mb-3">
                     {PRESET_CITIES.map((city) => (
                       <CityPill
                         key={city.name}
@@ -1025,39 +1045,43 @@ export default function OrderSimulator() {
                         onClick={() => setSelectedCity(city.name)}
                       />
                     ))}
-                    <button
-                      onClick={() => setSelectedCity(selectedCity === 'custom' ? '' : 'custom')}
-                      className={`px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200 border flex items-center gap-1.5 ${
-                        selectedCity === 'custom'
-                          ? 'bg-[var(--color-accent)] text-white border-[var(--color-accent)] shadow-lg'
-                          : 'bg-[var(--color-bg-input)] text-[var(--color-text-secondary)] border-[var(--color-border)] hover:border-[var(--color-accent)] hover:text-[var(--color-text-primary)]'
-                      }`}
-                      id="city-custom"
-                    >
-                      📍 Custom
-                    </button>
                   </div>
 
+                  {/* Custom Location Button */}
+                  <button
+                    onClick={() => setSelectedCity(selectedCity === 'custom' ? '' : 'custom')}
+                    className={`os-city-pill ${selectedCity === 'custom' ? 'os-city-pill--selected' : ''}`}
+                    style={{ flexDirection: 'row', gap: 8, width: '100%', justifyContent: 'center', padding: '10px 16px' }}
+                    id="city-custom"
+                  >
+                    <span className="os-city-pill__icon">📍</span>
+                    <span className="os-city-pill__name">Custom Coordinates</span>
+                  </button>
+
                   {selectedCity === 'custom' && (
-                    <div className="grid grid-cols-2 gap-3 animate-fade-in mt-3">
-                      <input
-                        type="number"
-                        step="any"
-                        placeholder="Latitude (-90 to 90)"
-                        value={customLat}
-                        onChange={(e) => setCustomLat(e.target.value)}
-                        className="h-10 rounded-lg px-3 text-sm"
-                        id="custom-lat"
-                      />
-                      <input
-                        type="number"
-                        step="any"
-                        placeholder="Longitude (-180 to 180)"
-                        value={customLng}
-                        onChange={(e) => setCustomLng(e.target.value)}
-                        className="h-10 rounded-lg px-3 text-sm"
-                        id="custom-lng"
-                      />
+                    <div className="os-coord-inputs">
+                      <div className="os-coord-group">
+                        <label htmlFor="custom-lat">Latitude</label>
+                        <input
+                          type="number"
+                          step="any"
+                          placeholder="-90 to 90"
+                          value={customLat}
+                          onChange={(e) => setCustomLat(e.target.value)}
+                          id="custom-lat"
+                        />
+                      </div>
+                      <div className="os-coord-group">
+                        <label htmlFor="custom-lng">Longitude</label>
+                        <input
+                          type="number"
+                          step="any"
+                          placeholder="-180 to 180"
+                          value={customLng}
+                          onChange={(e) => setCustomLng(e.target.value)}
+                          id="custom-lng"
+                        />
+                      </div>
                     </div>
                   )}
 
@@ -1067,7 +1091,7 @@ export default function OrderSimulator() {
                       <span className="text-xs text-[var(--color-text-muted)]">
                         {(() => {
                           const city = PRESET_CITIES.find(c => c.name === selectedCity);
-                          return city ? `${city.lat}°N, ${city.lng}°E` : '';
+                          return city ? `Delivering to ${selectedCity} — ${city.lat}°N, ${city.lng}°E` : '';
                         })()}
                       </span>
                     </div>
@@ -1082,33 +1106,45 @@ export default function OrderSimulator() {
                     subtitle={skuLoading ? 'Loading products from warehouses…' : `${productCatalog.length} products available`}
                   />
 
+                  {/* Loading: Skeleton Cards */}
                   {skuLoading && (
-                    <div className="flex items-center justify-center py-12 gap-3">
-                      <IconSpinner className="w-5 h-5 text-[var(--color-accent)]" />
-                      <span className="text-sm text-[var(--color-text-muted)]">Loading product catalog…</span>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4">
+                      {[1, 2, 3, 4, 5, 6].map((n) => (
+                        <SkeletonProductCard key={n} />
+                      ))}
                     </div>
                   )}
 
+                  {/* Error State */}
                   {skuError && (
-                    <div className="rounded-lg border border-[var(--color-danger)] p-4 text-center" role="alert">
-                      <p className="text-sm text-[var(--color-danger)] mb-2">{skuError}</p>
+                    <div className="rounded-lg border border-[var(--color-danger)] p-6 text-center" role="alert">
+                      <div className="os-empty-products__icon mx-auto" style={{ background: 'var(--color-danger-glow)' }}>
+                        <span>⚠️</span>
+                      </div>
+                      <p className="text-sm text-[var(--color-danger)] mb-3 font-medium">{skuError}</p>
                       <button
                         onClick={() => window.location.reload()}
-                        className="text-xs text-[var(--color-accent)] font-semibold hover:underline"
+                        className="btn-secondary px-4 py-2 text-xs"
                       >
                         Retry
                       </button>
                     </div>
                   )}
 
+                  {/* Empty Catalog */}
                   {!skuLoading && !skuError && productCatalog.length === 0 && (
-                    <div className="text-center py-12">
-                      <p className="text-sm text-[var(--color-text-muted)]">No products found in any warehouse.</p>
+                    <div className="os-empty-products">
+                      <div className="os-empty-products__icon">📦</div>
+                      <p className="text-sm font-medium text-[var(--color-text-secondary)] mb-1">No products found</p>
+                      <p className="text-xs text-[var(--color-text-muted)]">
+                        No inventory was found in any warehouse. Check your backend connection.
+                      </p>
                     </div>
                   )}
 
+                  {/* Product Grid */}
                   {!skuLoading && !skuError && productCatalog.length > 0 && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4">
                       {productCatalog.map((product) => (
                         <ProductCard
                           key={product.sku}
@@ -1125,36 +1161,39 @@ export default function OrderSimulator() {
               {/* ════════════════ RIGHT: Cart Panel ════════════════ */}
               <div className="lg:col-span-1 space-y-6">
                 <div className="lg:sticky lg:top-8">
-                  <SectionCard>
-                    <SectionHeader
-                      icon={<IconCart />}
-                      title="Your Cart"
-                      subtitle={cart.length > 0 ? `${cartItemCount} item${cartItemCount !== 1 ? 's' : ''}` : undefined}
-                      action={
-                        cart.length > 0 ? (
-                          <button
-                            onClick={clearCart}
-                            className="text-[10px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wider hover:text-[var(--color-danger)] transition-colors"
-                            id="clear-cart-btn"
-                          >
-                            Clear All
-                          </button>
-                        ) : null
-                      }
-                    />
+                  <div className="os-cart-panel">
+                    {/* Header */}
+                    <div className="os-cart-panel__header">
+                      <div className="os-cart-panel__title">
+                        <IconCart />
+                        Your Cart
+                        {cart.length > 0 && (
+                          <span className="os-cart-panel__count">{cartItemCount}</span>
+                        )}
+                      </div>
+                      {cart.length > 0 && (
+                        <button
+                          onClick={clearCart}
+                          className="os-cart-panel__clear"
+                          id="clear-cart-btn"
+                        >
+                          Clear All
+                        </button>
+                      )}
+                    </div>
 
                     {/* Empty Cart */}
                     {cart.length === 0 && (
-                      <div className="text-center py-10">
-                        <div className="w-14 h-14 rounded-2xl mx-auto flex items-center justify-center mb-3" style={{ background: 'var(--color-accent-glow)' }}>
+                      <div className="os-empty-cart">
+                        <div className="os-empty-cart__icon">
                           <svg className="w-7 h-7 text-[var(--color-accent)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 0 0-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 0 0-16.536-1.84M7.5 14.25 5.106 5.272M6 20.25a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Zm12.75 0a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Z" />
                           </svg>
                         </div>
-                        <p className="text-sm font-medium text-[var(--color-text-secondary)] mb-1">
+                        <p className="os-empty-cart__title">
                           Your cart is empty
                         </p>
-                        <p className="text-xs text-[var(--color-text-muted)]">
+                        <p className="os-empty-cart__subtitle">
                           Browse products and add items to get started
                         </p>
                       </div>
@@ -1162,7 +1201,7 @@ export default function OrderSimulator() {
 
                     {/* Cart Items */}
                     {cart.length > 0 && (
-                      <div className="divide-y divide-[var(--color-border-subtle)]">
+                      <div className="os-cart-panel__items">
                         {cart.map((item) => (
                           <CartItem
                             key={item.sku}
@@ -1174,22 +1213,45 @@ export default function OrderSimulator() {
                       </div>
                     )}
 
-                    {/* Location Warning */}
-                    {cart.length > 0 && !getCustomerCoords() && (
-                      <div className="mt-4 rounded-lg border border-[var(--color-warning)] p-3 flex items-start gap-2 animate-fade-in">
-                        <span className="text-sm">📍</span>
-                        <p className="text-xs text-[var(--color-warning)]">
-                          Please select a delivery location before checkout.
-                        </p>
-                      </div>
-                    )}
+                    {/* Footer: Summary + Checkout */}
+                    <div className="os-cart-panel__footer">
+                      {/* Location Warning */}
+                      {cart.length > 0 && !getCustomerCoords() && (
+                        <div className="os-location-warning mb-4">
+                          <span>📍</span>
+                          <p className="os-location-warning__text">
+                            Select a delivery location before checkout
+                          </p>
+                        </div>
+                      )}
 
-                    {/* Checkout Button */}
-                    <div className="mt-5">
+                      {/* Order Summary */}
+                      {cart.length > 0 && (
+                        <div className="os-order-summary">
+                          <div className="os-order-summary__row">
+                            <span className="os-order-summary__label">Items</span>
+                            <span className="os-order-summary__value">{cartItemCount}</span>
+                          </div>
+                          <div className="os-order-summary__row">
+                            <span className="os-order-summary__label">Unique SKUs</span>
+                            <span className="os-order-summary__value">{cart.length}</span>
+                          </div>
+                          {getCustomerCoords() && (
+                            <div className="os-order-summary__row">
+                              <span className="os-order-summary__label">Delivery</span>
+                              <span className="os-order-summary__value" style={{ color: 'var(--color-success)' }}>
+                                {selectedCity !== 'custom' ? selectedCity : 'Custom'}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Checkout Button */}
                       <button
                         onClick={handleCheckout}
                         disabled={!isFormValid() || checkoutState === 'loading'}
-                        className="w-full py-3 btn-primary text-sm flex items-center justify-center gap-2"
+                        className="os-checkout-btn"
                         id="place-order-btn"
                       >
                         {checkoutState === 'loading' ? (
@@ -1205,7 +1267,7 @@ export default function OrderSimulator() {
                         )}
                       </button>
                     </div>
-                  </SectionCard>
+                  </div>
 
                   {/* Error State Below Cart */}
                   {checkoutState === 'error' && (
@@ -1223,7 +1285,7 @@ export default function OrderSimulator() {
       {/* ════════════════ FLASH SALE TAB ════════════════ */}
       {activeTab === 'flash' && (
         <div className="space-y-6 animate-fade-in">
-          <SectionCard>
+          <div className="os-flash-panel">
             <SectionHeader
               icon={<IconFlash />}
               title="Flash Sale Simulator"
@@ -1233,10 +1295,8 @@ export default function OrderSimulator() {
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">
               {/* SKU */}
-              <div>
-                <label className="block text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wider mb-1.5">
-                  Target SKU
-                </label>
+              <div className="os-flash-input-group">
+                <label htmlFor="flash-sku">Target SKU</label>
                 <select
                   value={flashSku}
                   onChange={(e) => setFlashSku(e.target.value)}
@@ -1254,10 +1314,8 @@ export default function OrderSimulator() {
               </div>
 
               {/* Quantity */}
-              <div>
-                <label className="block text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wider mb-1.5">
-                  Qty per Order
-                </label>
+              <div className="os-flash-input-group">
+                <label htmlFor="flash-qty">Qty per Order</label>
                 <input
                   type="number"
                   min="1"
@@ -1270,10 +1328,8 @@ export default function OrderSimulator() {
               </div>
 
               {/* Concurrency */}
-              <div>
-                <label className="block text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wider mb-1.5">
-                  Concurrency (1–50)
-                </label>
+              <div className="os-flash-input-group">
+                <label htmlFor="flash-concurrency">Concurrency (1–50)</label>
                 <input
                   type="number"
                   min="1"
@@ -1299,7 +1355,7 @@ export default function OrderSimulator() {
             <button
               onClick={handleFlashTest}
               disabled={!flashSku || flashState === 'loading'}
-              className="w-full sm:w-auto px-6 py-2.5 btn-outline-warning text-sm"
+              className="os-flash-btn"
               id="flash-test-btn"
             >
               {flashState === 'loading' ? (
@@ -1392,7 +1448,7 @@ export default function OrderSimulator() {
                 </p>
               </div>
             )}
-          </SectionCard>
+          </div>
         </div>
       )}
     </div>
