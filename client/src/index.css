@@ -1997,3 +1997,79 @@ button:disabled {
 .os-checkout-btn:hover:not(:disabled) {
   animation: none;
 }
+
+/* ─── Mobile Touch Target Improvements ───────────────────── */
+@media (max-width: 640px) {
+  .os-product-card__add-btn {
+    padding: 12px 0;
+    font-size: 13px;
+    min-height: 44px;
+  }
+
+  .os-qty-stepper__btn {
+    width: 36px;
+    height: 36px;
+  }
+
+  .os-qty-stepper__value {
+    width: 40px;
+    height: 36px;
+    line-height: 36px;
+    font-size: 14px !important;
+  }
+
+  .os-cart-remove {
+    width: 36px;
+    height: 36px;
+  }
+
+  .os-checkout-btn {
+    padding: 16px 0;
+    font-size: 15px;
+    min-height: 52px;
+  }
+
+  .os-city-pill {
+    padding: 14px 8px;
+  }
+
+  .os-city-pill__icon {
+    font-size: 24px;
+  }
+
+  .os-city-pill__name {
+    font-size: 12px;
+  }
+
+  .os-empty-cart {
+    padding: 24px 16px;
+  }
+
+  .os-order-summary {
+    padding: 8px 0;
+  }
+}
+
+/* ─── Cart Panel Desktop Scroll ──────────────────────────── */
+@media (min-width: 1024px) {
+  .os-cart-panel {
+    max-height: calc(100vh - 64px);
+    overflow-y: auto;
+  }
+
+  .os-cart-panel__items {
+    max-height: 320px;
+    overflow-y: auto;
+  }
+}
+
+/* ─── Tablet Adjustments ─────────────────────────────────── */
+@media (min-width: 641px) and (max-width: 1023px) {
+  .os-city-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .os-product-card__add-btn {
+    padding: 10px 0;
+  }
+}
