@@ -1949,3 +1949,51 @@ button:disabled {
     padding: 16px;
   }
 }
+
+/* ─── Quantity Stepper Input Override ─────────────────────── */
+/* Override the global !important input styles for the inline qty stepper */
+.os-qty-stepper .os-qty-stepper__value {
+  background: transparent !important;
+  border: none !important;
+  border-left: 1px solid var(--color-border-subtle) !important;
+  border-right: 1px solid var(--color-border-subtle) !important;
+  border-radius: 0 !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  width: 32px;
+  height: 28px;
+  padding: 0 !important;
+  text-align: center;
+  color: var(--color-text-primary) !important;
+}
+
+.os-qty-stepper .os-qty-stepper__value:focus {
+  box-shadow: none !important;
+  background: var(--color-accent-glow) !important;
+}
+
+.os-qty-stepper .os-qty-stepper__value:hover {
+  border-color: var(--color-border-subtle) !important;
+}
+
+/* Hide spin buttons inside qty stepper */
+.os-qty-stepper .os-qty-stepper__value::-webkit-inner-spin-button,
+.os-qty-stepper .os-qty-stepper__value::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+  display: none;
+}
+
+/* ─── Checkout Button Pulse (when valid) ─────────────────── */
+@keyframes checkoutPulse {
+  0%, 100% { box-shadow: 0 4px 16px rgba(99, 102, 241, 0.25); }
+  50% { box-shadow: 0 4px 24px rgba(99, 102, 241, 0.4); }
+}
+
+.os-checkout-btn:not(:disabled) {
+  animation: checkoutPulse 3s ease-in-out infinite;
+}
+
+.os-checkout-btn:hover:not(:disabled) {
+  animation: none;
+}
