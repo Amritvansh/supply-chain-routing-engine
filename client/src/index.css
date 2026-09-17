@@ -2073,3 +2073,40 @@ button:disabled {
     padding: 10px 0;
   }
 }
+
+/* ─── OS Focus Visible Overrides ─────────────────────────── */
+.os-city-pill:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px var(--color-accent-glow);
+}
+
+.os-product-card__add-btn:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.os-checkout-btn:focus-visible {
+  outline: 2px solid white;
+  outline-offset: 3px;
+}
+
+.os-qty-stepper__btn:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+.os-cart-remove:focus-visible {
+  outline: 2px solid var(--color-danger);
+  outline-offset: 2px;
+}
+
+.os-tab:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.os-flash-btn:focus-visible {
+  outline: 2px solid var(--color-warning);
+  outline-offset: 3px;
+}
