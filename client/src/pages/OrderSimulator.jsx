@@ -338,9 +338,9 @@ function ShoppingFlowIndicator({ hasLocation, hasItems, isCheckingOut }) {
 
 // ─── Skeleton Product Card ──────────────────────────────────
 
-function SkeletonProductCard() {
+function SkeletonProductCard({ index = 0 }) {
   return (
-    <div className="os-skeleton-card">
+    <div className="os-skeleton-card animate-fade-in" style={{ animationDelay: `${index * 80}ms`, opacity: 0 }}>
       <div className="os-skeleton-card__img" />
       <div className="os-skeleton-card__body">
         <div className="os-skeleton-bar" style={{ width: '70%' }} />
@@ -1112,8 +1112,8 @@ export default function OrderSimulator() {
                   {/* Loading: Skeleton Cards */}
                   {skuLoading && (
                     <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4">
-                      {[1, 2, 3, 4, 5, 6].map((n) => (
-                        <SkeletonProductCard key={n} />
+                      {[0, 1, 2, 3, 4, 5, 6, 7].map((n) => (
+                        <SkeletonProductCard key={n} index={n} />
                       ))}
                     </div>
                   )}
