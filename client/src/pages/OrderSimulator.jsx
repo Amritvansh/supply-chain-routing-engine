@@ -1014,10 +1014,11 @@ export default function OrderSimulator() {
               />
 
               {/* Place New Order button */}
-              <div className="flex justify-center">
+              <div className="flex justify-center pt-2">
                 <button
                   onClick={handleNewOrder}
-                  className="btn-secondary px-6 py-2.5 flex items-center gap-2"
+                  className="btn-secondary px-8 py-3 flex items-center gap-2 text-sm"
+                  style={{ borderColor: 'var(--color-accent)', color: 'var(--color-accent)' }}
                   id="new-order-btn"
                 >
                   <IconCart />
