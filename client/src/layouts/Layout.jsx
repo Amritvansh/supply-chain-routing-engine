@@ -52,8 +52,27 @@ const navItems = [
 
 export default function Layout() {
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // Desktop sidebar collapse (separate from mobile drawer)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [healthStatus, setHealthStatus] = useState('unknown');
   const location = useLocation();
+
+  // ── Theme toggle (Day / Night) ──────────────────────────────
+  const [isDark, setIsDark] = useState(() => {
+    // Default: dark mode (existing site appearance). Only switch to light if
+    // the user previously saved 'light' in localStorage.
+    const saved = localStorage.getItem('theme');
+    return saved !== 'light';
+  });
+
+  useEffect(() => {
+    if (isDark) {
+      document.documentElement.classList.remove('light');
+    } else {
+      document.documentElement.classList.add('light');
+    }
+    localStorage.setItem('theme', isDark ? 'dark' : 'light');
+  }, [isDark]);
 
   // Close drawer on route change
   useEffect(() => {
@@ -89,24 +108,7 @@ export default function Layout() {
 
   return (
     <div className="layout-root" style={{ minHeight: '100vh' }}>
-      {/* Mobile menu toggle */}
-      <button
-        onClick={() => setDrawerOpen((prev) => !prev)}
-        className="menu-toggle-btn"
-        aria-label={drawerOpen ? 'Close navigation' : 'Open navigation'}
-        aria-expanded={drawerOpen}
-        id="menu-toggle"
-      >
-        {drawerOpen ? (
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-          </svg>
-        ) : (
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
-          </svg>
-        )}
-      </button>
+
 
       {/* Backdrop */}
       <div
@@ -116,7 +118,11 @@ export default function Layout() {
       />
 
       {/* Sidebar */}
-      <aside className={`sidebar-drawer ${drawerOpen ? 'sidebar-drawer--open' : ''}`}>
+      <aside className={[
+        'sidebar-drawer',
+        drawerOpen ? 'sidebar-drawer--open' : '',
+        sidebarCollapsed ? 'sidebar-drawer--collapsed' : '',
+      ].join(' ')}>
         {/* Brand */}
         <div className="px-5 py-5 border-b border-[var(--color-border-subtle)]">
           <div className="flex items-center gap-3">
@@ -162,6 +168,31 @@ export default function Layout() {
 
         {/* Footer */}
         <div className="px-5 py-4 border-t border-[var(--color-border-subtle)]">
+          {/* Sidebar collapse/expand toggle */}
+          <button
+            onClick={() => setSidebarCollapsed(true)}
+            id="menu-toggle"
+            aria-label="Collapse sidebar"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: 'var(--color-text-muted)',
+              fontSize: '11px',
+              fontWeight: 500,
+              padding: '4px 0',
+              marginBottom: '10px',
+              width: '100%',
+            }}
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+            </svg>
+            Close menu
+          </button>
           <div className="flex items-center gap-2 mb-2">
             <div
               className="w-1.5 h-1.5 rounded-full shrink-0"
@@ -184,7 +215,70 @@ export default function Layout() {
       </aside>
 
       {/* Main Content */}
-      <main className="layout-main" style={{ minHeight: '100vh' }}>
+      <main
+        className={['layout-main', sidebarCollapsed ? 'layout-main--collapsed' : ''].join(' ')}
+        style={{ minHeight: '100vh', position: 'relative' }}
+      >
+        {/* Floating reopen button — only visible when sidebar is collapsed */}
+        {sidebarCollapsed && (
+          <button
+            onClick={() => setSidebarCollapsed(false)}
+            aria-label="Open sidebar"
+            style={{
+              position: 'fixed',
+              top: '16px',
+              left: '16px',
+              zIndex: 60,
+              width: '40px',
+              height: '40px',
+              borderRadius: '8px',
+              background: 'var(--color-bg-card-solid)',
+              border: '1px solid var(--color-border)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              color: 'var(--color-text-secondary)',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+            }}
+          >
+            <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+            </svg>
+          </button>
+        )}
+        {/* Top-right theme toggle */}
+        <div
+          style={{
+            position: 'absolute',
+            top: '18px',
+            right: '24px',
+            zIndex: 20,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+          }}
+        >
+          <span
+            style={{
+              fontSize: '10px',
+              fontWeight: 500,
+              color: 'var(--color-text-muted)',
+            }}
+          >
+            {isDark ? 'Dark' : 'Light'}
+          </span>
+          <button
+            id="theme-toggle"
+            aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+            aria-pressed={!isDark}
+            onClick={() => setIsDark((prev) => !prev)}
+            className={`theme-toggle ${isDark ? 'theme-toggle--dark' : ''}`}
+          >
+            <span className="theme-toggle__thumb">☀️</span>
+            <span className="theme-toggle__moon">🌙</span>
+          </button>
+        </div>
         <div className="px-6 py-6 lg:px-8 lg:py-8 max-w-[1360px] mx-auto">
           <Outlet />
         </div>

@@ -39,6 +39,87 @@
   --radius-sm: 6px;
 }
 
+/* ─── Light / Day Mode Overrides ────────────────────────── */
+:root.light {
+  --color-bg-primary: #f1f5f9;
+  --color-bg-secondary: #e2e8f0;
+  --color-bg-card: rgba(255, 255, 255, 0.8);
+  --color-bg-card-solid: #ffffff;
+  --color-bg-sidebar: #ffffff;
+  --color-bg-hover: rgba(99, 102, 241, 0.07);
+  --color-bg-input: rgba(241, 245, 249, 0.9);
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #334155;
+  --color-text-muted: #64748b;
+  --color-accent: #6366f1;
+  --color-accent-hover: #4f46e5;
+  --color-accent-glow: rgba(99, 102, 241, 0.15);
+  --color-accent-gradient: linear-gradient(135deg, #6366f1, #818cf8);
+  --color-success: #10b981;
+  --color-success-glow: rgba(16, 185, 129, 0.12);
+  --color-warning: #f59e0b;
+  --color-warning-glow: rgba(245, 158, 11, 0.12);
+  --color-danger: #ef4444;
+  --color-danger-glow: rgba(239, 68, 68, 0.12);
+  --color-border: rgba(148, 163, 184, 0.5);
+  --color-border-subtle: rgba(148, 163, 184, 0.25);
+  --color-glass: rgba(255, 255, 255, 0.65);
+  --color-glass-border: rgba(148, 163, 184, 0.3);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.06), 0 4px 16px rgba(0, 0, 0, 0.04);
+  --shadow-glow: 0 0 24px rgba(99, 102, 241, 0.06);
+}
+
+:root.light body {
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(99, 102, 241, 0.06), transparent);
+}
+
+/* ─── Day/Night Toggle Pill ──────────────────────────────── */
+.theme-toggle {
+  display: flex;
+  align-items: center;
+  background: #d1d5db;
+  border-radius: 999px;
+  padding: 3px;
+  width: 60px;
+  height: 30px;
+  cursor: pointer;
+  border: none;
+  position: relative;
+  transition: background 0.3s ease;
+  flex-shrink: 0;
+}
+
+.theme-toggle__thumb {
+  position: absolute;
+  left: 3px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  line-height: 1;
+}
+
+.theme-toggle__moon {
+  position: absolute;
+  right: 6px;
+  font-size: 13px;
+  line-height: 1;
+  opacity: 0.55;
+  pointer-events: none;
+  user-select: none;
+}
+
+.theme-toggle--dark .theme-toggle__thumb {
+  transform: translateX(30px);
+}
+
 /* ─── Base Reset ─────────────────────────────────────────── */
 *,
 *::before,
@@ -829,14 +910,16 @@ input[type="number"]::-webkit-outer-spin-button {
     box-shadow: none;
     border-right: 1px solid var(--color-border-subtle);
     z-index: 30;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Collapsed state overrides the always-visible desktop rule */
+  .sidebar-drawer--collapsed {
+    transform: translateX(-100%) !important;
   }
 
   .sidebar-drawer--open {
     box-shadow: none;
-  }
-
-  .menu-toggle-btn {
-    display: none;
   }
 
   .drawer-backdrop {
@@ -846,6 +929,14 @@ input[type="number"]::-webkit-outer-spin-button {
   .layout-main {
     margin-left: var(--sidebar-width);
     width: calc(100% - var(--sidebar-width));
+    transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* When sidebar is collapsed, main content fills full width */
+  .layout-main--collapsed {
+    margin-left: 0 !important;
+    width: 100% !important;
   }
 }
 
