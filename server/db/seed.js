@@ -19,6 +19,7 @@
 
 const { Client } = require('pg');
 const path = require('path');
+const bcrypt = require('bcrypt');
 
 // Load .env from the server directory
 require('dotenv').config({ path: path.resolve(__dirname, '..', '.env') });
@@ -80,6 +81,30 @@ async function seed() {
   try {
     await client.connect();
     console.log('Connected to PostgreSQL.');
+
+    // ── Seed Default Users ────────────────────────────────────────────────
+    console.log('\nSeeding users...');
+    const defaultUsers = [
+      { name: 'Host Admin',     email: 'host@supplychain.com',  password: 'host123',     role: 'host' },
+      { name: 'Test Customer',  email: 'customer@test.com',     password: 'customer123', role: 'customer' },
+    ];
+
+    for (const u of defaultUsers) {
+      const existing = await client.query(
+        'SELECT id FROM users WHERE email = $1',
+        [u.email]
+      );
+      if (existing.rows.length > 0) {
+        console.log(`  SKIP  user: ${u.email} (already exists)`);
+      } else {
+        const hash = await bcrypt.hash(u.password, 12);
+        await client.query(
+          'INSERT INTO users (name, email, password_hash, role) VALUES ($1, $2, $3, $4)',
+          [u.name, u.email, hash, u.role]
+        );
+        console.log(`  INSERT user: ${u.email} (role: ${u.role})`);
+      }
+    }
 
     // ── Insert Warehouses ─────────────────────────────────────────────────
     console.log('\nSeeding warehouses...');

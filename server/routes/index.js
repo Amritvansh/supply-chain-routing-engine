@@ -7,6 +7,7 @@
 const { Router } = require('express');
 
 const healthRouter = require('./health');
+const authRouter = require('./auth');
 const ordersRouter = require('./orders');
 const warehousesRouter = require('./warehouses');
 const webhooksRouter = require('./webhooks');
@@ -16,6 +17,9 @@ const router = Router();
 
 // Health check (fully implemented in Week 1)
 router.use('/health', healthRouter);
+
+// Authentication (register, login, profile)
+router.use('/auth', authRouter);
 
 // Order routes (stubs — business logic in Week 2-3)
 router.use('/orders', ordersRouter);
@@ -30,3 +34,4 @@ router.use('/webhooks', webhooksRouter);
 router.use('/dashboard', dashboardRouter);
 
 module.exports = router;
+

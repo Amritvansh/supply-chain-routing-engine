@@ -34,6 +34,12 @@ const env = {
   GEMINI_FAILURE_THRESHOLD: parseInt(process.env.GEMINI_FAILURE_THRESHOLD, 10) || 5,
   // Duration in ms to keep circuit OPEN before testing with HALF_OPEN
   GEMINI_COOLDOWN_MS: parseInt(process.env.GEMINI_COOLDOWN_MS, 10) || 60000,
+
+  // ─── Authentication (JWT) ─────────────────────────────────
+  // Secret key for signing JWTs (MUST be set in production)
+  JWT_SECRET: process.env.JWT_SECRET || 'supply-chain-dev-secret-change-in-production',
+  // Token expiration duration (default: 7 days)
+  JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '7d',
 };
 
 module.exports = env;

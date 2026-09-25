@@ -8,12 +8,13 @@
  *   - NavLink provides active route highlighting
  */
 import { useState, useEffect, useCallback } from 'react';
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import * as api from '../lib/apiClient';
+import { useAuth } from '../context/AuthContext';
 
 const navItems = [
   {
-    to: '/',
+    to: '/host/dashboard',
     label: 'Control Tower',
     icon: (
       <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -22,7 +23,7 @@ const navItems = [
     ),
   },
   {
-    to: '/order-simulator',
+    to: '/host/order-simulator',
     label: 'Order Simulator',
     icon: (
       <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -31,7 +32,7 @@ const navItems = [
     ),
   },
   {
-    to: '/analytics',
+    to: '/host/analytics',
     label: 'Analytics',
     icon: (
       <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -40,7 +41,7 @@ const navItems = [
     ),
   },
   {
-    to: '/how-it-works',
+    to: '/host/how-it-works',
     label: 'How It Works',
     icon: (
       <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -56,6 +57,13 @@ export default function Layout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [healthStatus, setHealthStatus] = useState('unknown');
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
+
+  function handleLogout() {
+    logout();
+    navigate('/');
+  }
 
   // ── Theme toggle (Day / Night) ──────────────────────────────
   const [isDark, setIsDark] = useState(() => {
@@ -152,7 +160,7 @@ export default function Layout() {
               <NavLink
                 key={item.to}
                 to={item.to}
-                end={item.to === '/'}
+                end={item.to === '/host/dashboard'}
                 className={({ isActive }) =>
                   `nav-item ${isActive ? 'nav-item--active' : ''}`
                 }
@@ -193,6 +201,71 @@ export default function Layout() {
             </svg>
             Close menu
           </button>
+
+          {/* Logged-in user info + Logout */}
+          {user && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: '10px',
+              padding: '6px 8px',
+              borderRadius: '6px',
+              background: 'var(--color-bg-hover)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <div style={{
+                  width: '24px',
+                  height: '24px',
+                  borderRadius: '50%',
+                  background: 'var(--color-accent-gradient)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'white',
+                  fontSize: '10px',
+                  fontWeight: 700,
+                }}>
+                  {user.name?.charAt(0)?.toUpperCase() || 'H'}
+                </div>
+                <div>
+                  <p style={{
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    color: 'var(--color-text-primary)',
+                    margin: 0,
+                    lineHeight: 1.2,
+                  }}>{user.name}</p>
+                  <p style={{
+                    fontSize: '9px',
+                    color: 'var(--color-text-muted)',
+                    margin: 0,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px',
+                  }}>{user.role}</p>
+                </div>
+              </div>
+              <button
+                onClick={handleLogout}
+                aria-label="Logout"
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: 'var(--color-text-muted)',
+                  padding: '4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                }}
+                title="Logout"
+              >
+                <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" />
+                </svg>
+              </button>
+            </div>
+          )}
+
           <div className="flex items-center gap-2 mb-2">
             <div
               className="w-1.5 h-1.5 rounded-full shrink-0"

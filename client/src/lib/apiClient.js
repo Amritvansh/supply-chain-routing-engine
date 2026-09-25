@@ -15,6 +15,7 @@ const BASE_URL = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api
 
 /**
  * Generic fetch wrapper with consistent error handling.
+ * Automatically attaches JWT from localStorage if available.
  * @param {string} endpoint - path after /api/v1
  * @param {RequestInit} options - fetch options
  * @returns {Promise<any>} parsed JSON body
@@ -22,9 +23,13 @@ const BASE_URL = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api
 async function request(endpoint, options = {}) {
   const url = `${BASE_URL}${endpoint}`;
 
+  // Auto-attach JWT token if present
+  const token = localStorage.getItem('auth_token');
+
   const config = {
     headers: {
       'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options.headers,
     },
     ...options,
@@ -45,7 +50,39 @@ async function request(endpoint, options = {}) {
   return response.json();
 }
 
-// ─── Public API Methods ────────────────────────────────────
+// ─── Authentication API Methods ────────────────────────────
+
+/**
+ * Register a new user account.
+ * @param {{ name: string, email: string, password: string, role?: string }} data
+ */
+export function authRegister(data) {
+  return request('/auth/register', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+/**
+ * Login with email and password.
+ * @param {{ email: string, password: string }} data
+ */
+export function authLogin(data) {
+  return request('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+/**
+ * Get the current authenticated user's profile.
+ * Requires a valid JWT in localStorage.
+ */
+export function authGetMe() {
+  return request('/auth/me');
+}
+
+// ─── Order & Checkout API Methods ──────────────────────────
 
 /**
  * Submit a checkout order (synchronous deterministic path).
@@ -118,3 +155,4 @@ export function sendLogisticsWebhook(data) {
     body: JSON.stringify(data),
   });
 }
+
