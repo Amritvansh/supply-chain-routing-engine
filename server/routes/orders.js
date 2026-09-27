@@ -48,13 +48,17 @@ const {
 
 // Middleware
 const { checkoutRateLimiter } = require('../middleware/rateLimiter');
-const { verifyToken, requireCustomer } = require('../middleware/authMiddleware');
+const { verifyToken, requireCustomer, requireHost } = require('../middleware/authMiddleware');
 const {
   validateCheckoutBody,
   validateFlashTestBody,
   validateUuidParam,
   validateIdempotencyKey,
 } = require('../middleware/validators');
+const {
+  getAllOrders,
+  getHostOrderDetail,
+} = require('../controllers/orderController');
 
 const router = Router();
 
@@ -381,6 +385,20 @@ router.get('/my-orders',
   }
 );
 
+// ─── GET /api/v1/orders/all ─────────────────────────────────────
+/**
+ * Host-only: Returns ALL orders in the system for global visibility.
+ * Must be registered before /:id to prevent 'all' being parsed as UUID.
+ */
+router.get('/all', verifyToken, requireHost, getAllOrders);
+
+// ─── GET /api/v1/orders/host/:id ────────────────────────────────
+/**
+ * Host-only: Returns full order detail with routing analysis.
+ * Must be registered before /:id to prevent 'host' being parsed as UUID.
+ */
+router.get('/host/:id', verifyToken, requireHost, getHostOrderDetail);
+
 // ─── GET /api/v1/orders/track/:id ───────────────────────────────
 /**
  * Customer-facing order tracking.
@@ -441,13 +459,13 @@ router.get('/track/:id',
         [id]
       );
 
-      // Fetch shipment (for delivery distance / estimated days)
+      // Fetch shipments with warehouse locations
       const shipmentResult = await pool.query(
-        `SELECT sh.distance_km, sh.total_cost, sh.box_size, sh.created_at
+        `SELECT sh.distance_km, sh.total_cost, sh.box_size, sh.created_at, w.lat AS warehouse_lat, w.lng AS warehouse_lng, w.name AS warehouse_name
          FROM shipments sh
+         JOIN warehouses w ON w.id = sh.warehouse_id
          WHERE sh.order_id = $1
-         ORDER BY sh.created_at ASC
-         LIMIT 1`,
+         ORDER BY sh.created_at ASC`,
         [id]
       );
 
@@ -520,6 +538,14 @@ router.get('/track/:id',
         lineTotal: parseFloat(row.price) * row.qty,
       }));
 
+      const shipments = shipmentResult.rows.map(row => ({
+        warehouseLat: parseFloat(row.warehouse_lat),
+        warehouseLng: parseFloat(row.warehouse_lng),
+        warehouseName: row.warehouse_name,
+        distanceKm: parseFloat(row.distance_km),
+        totalCost: parseFloat(row.total_cost),
+      }));
+
       res.status(200).json({
         order: {
           id: order.id,
@@ -529,9 +555,12 @@ router.get('/track/:id',
           customerPhone: order.customer_phone,
           shippingAddress: order.shipping_address,
           pincode: order.pincode,
+          customerLat: parseFloat(order.customer_lat),
+          customerLng: parseFloat(order.customer_lng),
           totalAmount: order.total_amount ? parseFloat(order.total_amount) : null,
         },
         items,
+        shipments,
         deliveryFee,
         estimatedDays,
         timeline,

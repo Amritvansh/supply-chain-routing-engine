@@ -27,12 +27,12 @@ async function request(endpoint, options = {}) {
   const token = localStorage.getItem('auth_token');
 
   const config = {
+    ...options,
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options.headers,
     },
-    ...options,
   };
 
   const response = await fetch(url, config);
@@ -307,5 +307,24 @@ export function adjustInventory(data) {
     method: 'POST',
     body: JSON.stringify(data),
   });
+}
+
+// ─── Host Order Management API Methods ──────────────────────
+
+/**
+ * Fetch all orders globally (Host-only).
+ * Returns { orders: [...], count: number }
+ */
+export function getAllOrders() {
+  return request('/orders/all');
+}
+
+/**
+ * Fetch full order detail with routing analysis (Host-only).
+ * Returns { order, items, shipments, routingAnalysis, aiExplanation }
+ * @param {string} id - order UUID
+ */
+export function getHostOrderDetail(id) {
+  return request(`/orders/host/${id}`);
 }
 

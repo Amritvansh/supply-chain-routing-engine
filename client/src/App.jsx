@@ -26,12 +26,14 @@ import EntryPage from './pages/EntryPage';
 import Layout from './layouts/Layout';
 import CustomerLayout from './layouts/CustomerLayout';
 import ControlTowerDashboard from './pages/ControlTowerDashboard';
-import OrderSimulator from './pages/OrderSimulator';
+
 import Analytics from './pages/Analytics';
 import HowItWorks from './pages/HowItWorks';
 import HostProducts from './pages/HostProducts';
 import HostWarehouses from './pages/HostWarehouses';
 import HostInventory from './pages/HostInventory';
+import HostOrders from './pages/HostOrders';
+import HostOrderDetails from './pages/HostOrderDetails';
 import CustomerShop from './pages/CustomerShop';
 import CheckoutPage from './pages/CheckoutPage';
 import CustomerOrders from './pages/CustomerOrders';
@@ -56,12 +58,14 @@ export default function App() {
               }
             >
               <Route path="host/dashboard" element={<ControlTowerDashboard />} />
-              <Route path="host/order-simulator" element={<OrderSimulator />} />
+
               <Route path="host/analytics" element={<Analytics />} />
               <Route path="host/how-it-works" element={<HowItWorks />} />
               <Route path="host/products" element={<HostProducts />} />
               <Route path="host/warehouses" element={<HostWarehouses />} />
               <Route path="host/inventory" element={<HostInventory />} />
+              <Route path="host/orders" element={<HostOrders />} />
+              <Route path="host/orders/:id" element={<HostOrderDetails />} />
             </Route>
 
             {/* Customer-protected routes (Store Experience) */}

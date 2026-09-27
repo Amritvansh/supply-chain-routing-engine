@@ -8,14 +8,7 @@ import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import * as api from '../lib/apiClient';
 
-const CITY_PRESETS = [
-  { name: 'Delhi', lat: 28.6139, lng: 77.2090 },
-  { name: 'Mumbai', lat: 19.0760, lng: 72.8777 },
-  { name: 'Bengaluru', lat: 12.9716, lng: 77.5946 },
-  { name: 'Jaipur', lat: 26.9124, lng: 75.7873 },
-  { name: 'Kolkata', lat: 22.5726, lng: 88.3639 },
-  { name: 'Chennai', lat: 13.0827, lng: 80.2707 },
-];
+import 'maplibre-gl/dist/maplibre-gl.css';
 
 function formatINR(n) { return '₹' + Number(n).toLocaleString('en-IN'); }
 
@@ -33,7 +26,7 @@ export default function CheckoutPage() {
   const [pincode, setPincode] = useState('');
 
   // Map / location
-  const [lat, setLat] = useState(28.6139);
+  const [lat, setLat] = useState(28.6139); // Default to Delhi
   const [lng, setLng] = useState(77.2090);
   const mapRef = useRef(null);
   const markerRef = useRef(null);
@@ -43,9 +36,33 @@ export default function CheckoutPage() {
   const [quote, setQuote] = useState(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
 
-  // Submission
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+
+  // Search
+  const [searchQuery, setSearchQuery] = useState('');
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const searchTimeoutRef = useRef(null);
+
+  // ── Auto-fetch customer location ────────────────────────────
+  useEffect(() => {
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { latitude, longitude } = pos.coords;
+          setLat(Math.round(latitude * 10000) / 10000);
+          setLng(Math.round(longitude * 10000) / 10000);
+          if (mapRef.current && markerRef.current) {
+            mapRef.current.flyTo({ center: [longitude, latitude], zoom: 12 });
+            markerRef.current.setLngLat([longitude, latitude]);
+          }
+        },
+        (err) => console.warn('Geolocation failed', err),
+        { enableHighAccuracy: true, timeout: 5000 }
+      );
+    }
+  }, []);
 
   // ── Map initialization ──────────────────────────────────────
   useEffect(() => {
@@ -54,7 +71,7 @@ export default function CheckoutPage() {
       container: mapContainerRef.current,
       style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
       center: [lng, lat],
-      zoom: 10,
+      zoom: 12,
     });
     map.addControl(new maplibregl.NavigationControl(), 'top-right');
 
@@ -78,19 +95,49 @@ export default function CheckoutPage() {
     mapRef.current = map;
     markerRef.current = marker;
 
-    return () => map.remove();
+    return () => {
+      map.remove();
+      mapRef.current = null;
+      markerRef.current = null;
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function flyToCity(preset) {
-    setLat(preset.lat);
-    setLng(preset.lng);
-    setCity(preset.name);
-    if (mapRef.current) {
-      mapRef.current.flyTo({ center: [preset.lng, preset.lat], zoom: 11, duration: 1200 });
+  function handleSearchInput(e) {
+    const val = e.target.value;
+    setSearchQuery(val);
+    
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    
+    if (val.trim().length < 3) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
     }
-    if (markerRef.current) {
-      markerRef.current.setLngLat([preset.lng, preset.lat]);
+
+    searchTimeoutRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(val)}&limit=5&countrycodes=in`);
+        const data = await res.json();
+        setSuggestions(data || []);
+        setShowSuggestions(true);
+      } catch (err) {
+        console.error("Autocomplete failed", err);
+      }
+    }, 400);
+  }
+
+  function handleSelectSuggestion(suggestion) {
+    setSearchQuery(suggestion.display_name);
+    setShowSuggestions(false);
+    
+    const newLat = parseFloat(suggestion.lat);
+    const newLng = parseFloat(suggestion.lon);
+    setLat(newLat);
+    setLng(newLng);
+    if (mapRef.current && markerRef.current) {
+      mapRef.current.flyTo({ center: [newLng, newLat], zoom: 15, duration: 1500 });
+      markerRef.current.setLngLat([newLng, newLat]);
     }
   }
 
@@ -196,17 +243,43 @@ export default function CheckoutPage() {
                 }}>📍 {lat}, {lng}</span>
               </div>
 
-              {/* City presets */}
-              <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
-                {CITY_PRESETS.map(c => (
-                  <button key={c.name} onClick={() => flyToCity(c)} style={{
-                    padding: '5px 12px', borderRadius: 6, border: '1px solid rgba(51,65,85,0.4)',
-                    background: city === c.name ? 'rgba(16,185,129,0.15)' : 'rgba(15,22,41,0.5)',
-                    color: city === c.name ? '#34d399' : '#94a3b8',
-                    fontSize: 11, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s',
-                  }}>{c.name}</button>
-                ))}
+              <div style={{ position: 'relative', marginBottom: 14 }}>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input
+                    value={searchQuery}
+                    onChange={handleSearchInput}
+                    onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+                    style={{ ...inputStyle, flex: 1, margin: 0 }}
+                    placeholder="Search a location..."
+                  />
+                </div>
+                
+                {/* Autocomplete Dropdown */}
+                {showSuggestions && suggestions.length > 0 && (
+                  <div style={{
+                    position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10,
+                    marginTop: 4, background: '#0f1629', border: '1px solid rgba(51,65,85,0.6)',
+                    borderRadius: 8, overflow: 'hidden', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)'
+                  }}>
+                    {suggestions.map((s, idx) => (
+                      <div
+                        key={idx}
+                        onClick={() => handleSelectSuggestion(s)}
+                        style={{
+                          padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid rgba(51,65,85,0.3)',
+                          fontSize: 12, color: '#e2e8f0', transition: 'background 0.2s'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(51,65,85,0.4)'}
+                        onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                      >
+                        📍 {s.display_name}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
+
+              {/* Map Container */}
 
               <div ref={mapContainerRef} style={{ width: '100%', height: 300, borderRadius: 10, overflow: 'hidden' }} />
               <p style={{ fontSize: 11, color: '#64748b', marginTop: 8, textAlign: 'center' }}>

@@ -3,8 +3,10 @@
  *
  * NEVER displays warehouse scores, AI explainability, or routing internals.
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import maplibregl from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
 import * as api from '../lib/apiClient';
 
 function formatINR(n) { return '₹' + Number(n).toLocaleString('en-IN'); }
@@ -15,6 +17,9 @@ export default function CustomerOrderTrack() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  
+  const mapContainerRef = useRef(null);
+  const mapRef = useRef(null);
 
   useEffect(() => {
     api.trackOrder(id)
@@ -22,6 +27,91 @@ export default function CustomerOrderTrack() {
       .catch(e => setError(e.message || 'Failed to load order'))
       .finally(() => setLoading(false));
   }, [id]);
+
+  useEffect(() => {
+    if (!data || !data.shipments || !data.order || !mapContainerRef.current) return;
+    
+    const { order, shipments } = data;
+    if (!order.customerLat || !order.customerLng) return;
+
+    if (!mapRef.current) {
+      mapRef.current = new maplibregl.Map({
+        container: mapContainerRef.current,
+        style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
+        center: [order.customerLng, order.customerLat],
+        zoom: 4,
+        interactive: true,
+      });
+      mapRef.current.addControl(new maplibregl.NavigationControl(), 'top-right');
+    }
+    
+    const map = mapRef.current;
+    
+    map.on('load', () => {
+      // Customer Marker
+      new maplibregl.Marker({ color: '#10b981' })
+        .setLngLat([order.customerLng, order.customerLat])
+        .setPopup(new maplibregl.Popup({ offset: 25 }).setText('Delivery Location'))
+        .addTo(map);
+
+      const bounds = new maplibregl.LngLatBounds();
+      bounds.extend([order.customerLng, order.customerLat]);
+
+      // Warehouse markers & lines
+      shipments.forEach((sh, i) => {
+        if (!sh.warehouseLat || !sh.warehouseLng) return;
+        
+        new maplibregl.Marker({ color: '#3b82f6' })
+          .setLngLat([sh.warehouseLng, sh.warehouseLat])
+          .setPopup(new maplibregl.Popup({ offset: 25 }).setText(sh.warehouseName || 'Warehouse'))
+          .addTo(map);
+          
+        bounds.extend([sh.warehouseLng, sh.warehouseLat]);
+        
+        const routeId = `route-${i}`;
+        if (!map.getSource(routeId)) {
+          map.addSource(routeId, {
+            type: 'geojson',
+            data: {
+              type: 'Feature',
+              geometry: {
+                type: 'LineString',
+                coordinates: [
+                  [sh.warehouseLng, sh.warehouseLat],
+                  [order.customerLng, order.customerLat]
+                ]
+              }
+            }
+          });
+          map.addLayer({
+            id: routeId,
+            type: 'line',
+            source: routeId,
+            layout: {
+              'line-join': 'round',
+              'line-cap': 'round'
+            },
+            paint: {
+              'line-color': '#10b981',
+              'line-width': 3,
+              'line-dasharray': [2, 4]
+            }
+          });
+        }
+      });
+      
+      if (!bounds.isEmpty()) {
+        map.fitBounds(bounds, { padding: 50, maxZoom: 10 });
+      }
+    });
+
+    return () => {
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null;
+      }
+    };
+  }, [data]);
 
   if (loading) {
     return (
@@ -119,6 +209,17 @@ export default function CustomerOrderTrack() {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Map Container */}
+        {data.order?.customerLat && data.shipments?.length > 0 && (
+          <div style={{
+            background: 'rgba(15,22,41,0.65)', border: '1px solid rgba(51,65,85,0.35)',
+            borderRadius: 14, padding: 20, marginBottom: 20,
+          }}>
+            <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 16, color: '#e2e8f0' }}>Shipment Tracking</h3>
+            <div ref={mapContainerRef} style={{ width: '100%', height: 350, borderRadius: 10, overflow: 'hidden' }} />
           </div>
         )}
 
