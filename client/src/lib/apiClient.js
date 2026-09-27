@@ -156,6 +156,33 @@ export function sendLogisticsWebhook(data) {
   });
 }
 
+/**
+ * Fetch aggregated KPI stats for the Control Tower dashboard.
+ * Requires Host JWT.
+ */
+export function getDashboardStats() {
+  return request('/dashboard/stats');
+}
+
+/**
+ * Auto-progress a shipment through the full lifecycle (PICKED_UP → IN_TRANSIT → DELIVERED).
+ * Requires Host JWT.
+ * @param {string} shipmentId - shipment UUID
+ */
+export function simulateShipment(shipmentId) {
+  return request(`/webhooks/simulate/${shipmentId}`, {
+    method: 'POST',
+  });
+}
+
+/**
+ * Fetch the full webhook event timeline for a shipment.
+ * @param {string} shipmentId - shipment UUID
+ */
+export function getShipmentEvents(shipmentId) {
+  return request(`/webhooks/events/${shipmentId}`);
+}
+
 // ─── Product Catalog API Methods ───────────────────────────
 
 /**

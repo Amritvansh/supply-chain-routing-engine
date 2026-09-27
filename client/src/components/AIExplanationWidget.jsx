@@ -104,7 +104,7 @@ export default function AIExplanationWidget({ orderId, autoFetch = false }) {
     }
   }, [orderId]);
 
-  // Auto-fetch if requested (e.g., from OrderSimulator)
+  // Auto-fetch if requested (e.g., from HostOrderDetails)
   useEffect(() => {
     if (autoFetch && orderId) {
       fetchExplanation();

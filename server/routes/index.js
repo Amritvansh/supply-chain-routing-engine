@@ -5,6 +5,7 @@
  * This is the single entry point for all API routes.
  */
 const { Router } = require('express');
+const { verifyToken, requireHost } = require('../middleware/authMiddleware');
 
 const healthRouter = require('./health');
 const authRouter = require('./auth');
@@ -36,7 +37,7 @@ router.use('/warehouses', warehousesRouter);
 router.use('/webhooks', webhooksRouter);
 
 // Dashboard routes (stub — business logic in Week 3)
-router.use('/dashboard', dashboardRouter);
+router.use('/dashboard', verifyToken, requireHost, dashboardRouter);
 
 // Inventory management (Host-only — stock adjustments)
 router.use('/inventory', inventoryRouter);

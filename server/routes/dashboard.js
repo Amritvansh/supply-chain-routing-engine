@@ -3,14 +3,16 @@
  *
  * GET /api/v1/dashboard/map-data — Aggregated warehouse + active-route data
  *                                  for the Control Tower map overlay
+ * GET /api/v1/dashboard/stats    — Aggregated KPI stats for the Control Tower
  *
  * Returns warehouse locations with inventory health summaries and recent
  * order routing paths (warehouse → customer coordinates).
  *
- * Uses only existing tables: warehouses, inventories, orders, shipments.
- * No new tables created.
+ * Uses only existing tables: warehouses, inventories, orders, shipments,
+ * webhook_events. No new tables created.
  *
- * Week 4: Uses Zod validation middleware and Pino structured logging.
+ * Phase 5: Added /stats endpoint for KPI aggregation.
+ * Auth: verifyToken + requireHost applied at the router mount level (index.js).
  */
 'use strict';
 
@@ -135,4 +137,130 @@ router.get('/map-data', validateMapDataQuery, async (req, res, next) => {
   }
 });
 
+/**
+ * GET /api/v1/dashboard/stats
+ *
+ * Aggregated KPI stats for the Host Control Tower dashboard.
+ *
+ * Returns:
+ *   - ordersByStatus: { PENDING, ROUTED, SPLIT_ROUTED, FULFILLED, FAILED }
+ *   - totalOrders, totalRevenue
+ *   - deliveryMetrics: avgDistanceKm, avgCostPerShipment, totalShipments
+ *   - shipmentLifecycle: counts per webhook status stage
+ *   - warehouseHealth: { total, active, lowStock, healthy }
+ *
+ * All data is pulled from existing tables in parallel for performance.
+ */
+router.get('/stats', async (req, res, next) => {
+  try {
+    const log = req.log || logger;
+
+    // Run all aggregation queries in parallel
+    const [
+      orderStatsResult,
+      deliveryResult,
+      lifecycleResult,
+      warehouseHealthResult,
+    ] = await Promise.all([
+      // ─── Order counts by status + total revenue ─────────
+      pool.query(`
+        SELECT
+          COUNT(*)::int AS total_orders,
+          COALESCE(SUM(total_amount), 0) AS total_revenue,
+          COUNT(*) FILTER (WHERE status = 'PENDING')::int       AS pending,
+          COUNT(*) FILTER (WHERE status = 'ROUTED')::int        AS routed,
+          COUNT(*) FILTER (WHERE status IN ('SPLIT_ROUTED', 'SPLIT'))::int AS split_routed,
+          COUNT(*) FILTER (WHERE status = 'FULFILLED')::int     AS fulfilled,
+          COUNT(*) FILTER (WHERE status = 'FAILED')::int        AS failed
+        FROM orders
+      `),
+
+      // ─── Delivery metrics (from shipments) ──────────────
+      pool.query(`
+        SELECT
+          COUNT(*)::int AS total_shipments,
+          COALESCE(ROUND(AVG(distance_km)::numeric, 2), 0) AS avg_distance_km,
+          COALESCE(ROUND(AVG(total_cost)::numeric, 2), 0) AS avg_cost_per_shipment,
+          COALESCE(ROUND(SUM(total_cost)::numeric, 2), 0) AS total_delivery_cost
+        FROM shipments
+      `),
+
+      // ─── Shipment lifecycle coverage (from webhook_events) ─
+      pool.query(`
+        SELECT
+          COUNT(DISTINCT shipment_id) FILTER (
+            WHERE status = 'PICKED_UP'
+          )::int AS picked_up,
+          COUNT(DISTINCT shipment_id) FILTER (
+            WHERE status = 'IN_TRANSIT'
+          )::int AS in_transit,
+          COUNT(DISTINCT shipment_id) FILTER (
+            WHERE status = 'DELIVERED'
+          )::int AS delivered,
+          COUNT(DISTINCT shipment_id)::int AS total_tracked
+        FROM webhook_events
+      `),
+
+      // ─── Warehouse health summary ───────────────────────
+      pool.query(`
+        SELECT
+          COUNT(*)::int AS total,
+          COUNT(*) FILTER (WHERE w.active = true)::int AS active,
+          COUNT(*) FILTER (
+            WHERE w.active = true
+            AND EXISTS (
+              SELECT 1 FROM inventories i
+              WHERE i.warehouse_id = w.id
+                AND i.available_qty <= $1
+            )
+          )::int AS low_stock
+        FROM warehouses w
+      `, [LOW_STOCK_THRESHOLD]),
+    ]);
+
+    const orderStats = orderStatsResult.rows[0];
+    const delivery = deliveryResult.rows[0];
+    const lifecycle = lifecycleResult.rows[0];
+    const warehouseHealth = warehouseHealthResult.rows[0];
+
+    log.info({
+      totalOrders: orderStats.total_orders,
+      totalShipments: delivery.total_shipments,
+    }, 'Dashboard stats: aggregated');
+
+    res.status(200).json({
+      ordersByStatus: {
+        pending: orderStats.pending,
+        routed: orderStats.routed,
+        splitRouted: orderStats.split_routed,
+        fulfilled: orderStats.fulfilled,
+        failed: orderStats.failed,
+      },
+      totalOrders: orderStats.total_orders,
+      totalRevenue: parseFloat(orderStats.total_revenue),
+      deliveryMetrics: {
+        totalShipments: delivery.total_shipments,
+        avgDistanceKm: parseFloat(delivery.avg_distance_km),
+        avgCostPerShipment: parseFloat(delivery.avg_cost_per_shipment),
+        totalDeliveryCost: parseFloat(delivery.total_delivery_cost),
+      },
+      shipmentLifecycle: {
+        totalTracked: lifecycle.total_tracked,
+        pickedUp: lifecycle.picked_up,
+        inTransit: lifecycle.in_transit,
+        delivered: lifecycle.delivered,
+      },
+      warehouseHealth: {
+        total: warehouseHealth.total,
+        active: warehouseHealth.active,
+        lowStock: warehouseHealth.low_stock,
+        healthy: warehouseHealth.active - warehouseHealth.low_stock,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;
+

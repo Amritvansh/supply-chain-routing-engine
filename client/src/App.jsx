@@ -4,7 +4,11 @@
  * Route Structure:
  *   /                             → EntryPage (role selection + login/register)
  *   /host/dashboard               → ControlTowerDashboard (Host only)
- *   /host/order-simulator         → OrderSimulator (Host only)
+ *   /host/products                → HostProducts (Host only)
+ *   /host/warehouses              → HostWarehouses (Host only)
+ *   /host/inventory               → HostInventory (Host only)
+ *   /host/orders                  → HostOrders (Host only)
+ *   /host/orders/:id              → HostOrderDetails (Host only)
  *   /host/analytics               → Analytics (Host only)
  *   /host/how-it-works            → HowItWorks (Host only)
  *   /customer/shop                → CustomerShop (Customer only)

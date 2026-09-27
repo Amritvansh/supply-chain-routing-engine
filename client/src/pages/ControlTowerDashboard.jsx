@@ -9,8 +9,9 @@
  *   - Route click → SelectedOrderPanel
  *
  * Data sources:
- *   - GET /api/v1/warehouses   → detailed inventory popups
- *   - GET /api/v1/dashboard/map-data → route overlays + warehouse health
+ *   - GET /api/v1/warehouses          → detailed inventory popups
+ *   - GET /api/v1/dashboard/map-data  → route overlays + warehouse health
+ *   - GET /api/v1/dashboard/stats     → aggregated KPI stats for cards
  */
 import { useState, useEffect, useRef, useCallback } from 'react';
 import maplibregl from 'maplibre-gl';
@@ -476,16 +477,20 @@ export default function ControlTowerDashboard() {
   const [error, setError] = useState(null);
   const [selectedRoute, setSelectedRoute] = useState(null);
   const [highlightLowStock, setHighlightLowStock] = useState(false);
+  const [stats, setStats] = useState(null);
+  const [statsLoading, setStatsLoading] = useState(true);
 
-  /** Fetch warehouse data (detailed inventory) and map data (routes). */
+  /** Fetch warehouse data (detailed inventory), map data (routes), and KPI stats. */
   const fetchData = useCallback(async () => {
     setLoading(true);
+    setStatsLoading(true);
     setError(null);
     try {
-      // Fetch both in parallel
-      const [warehouseData, mapData] = await Promise.all([
+      // Fetch all three in parallel
+      const [warehouseData, mapData, statsData] = await Promise.all([
         api.getWarehouses().catch(() => ({ warehouses: [] })),
         api.getMapData().catch(() => ({ warehouses: [], routes: [] })),
+        api.getDashboardStats().catch(() => null),
       ]);
 
       // Merge inventory data from getWarehouses into map-data warehouses
@@ -508,10 +513,12 @@ export default function ControlTowerDashboard() {
 
       setWarehouses(enrichedWarehouses.length > 0 ? enrichedWarehouses : warehouseData.warehouses || []);
       setRoutes(mapData.routes || []);
+      if (statsData) setStats(statsData);
     } catch (err) {
       setError(err.message || 'Unable to connect to the server. Check that the backend is running.');
     } finally {
       setLoading(false);
+      setStatsLoading(false);
     }
   }, []);
 
@@ -744,10 +751,11 @@ export default function ControlTowerDashboard() {
     mapRef.current.fitBounds(bounds, { padding: 60, maxZoom: 8, duration: 800 });
   }
 
-  // ─── Computed stats ─────────────────────────────────────
-  const activeWarehouses = warehouses.filter((w) => w.active).length;
-  const totalSkus = new Set(warehouses.flatMap((w) => (w.inventory || []).map((i) => i.sku))).size;
-  const lowStockCount = warehouses.filter(isLowStock).length;
+  // ─── Computed stats (prefer backend /stats, fallback to client-side) ─
+  const activeWarehouses = stats?.warehouseHealth?.active ?? warehouses.filter((w) => w.active).length;
+  const totalOrders = stats?.totalOrders ?? routes.length;
+  const lowStockCount = stats?.warehouseHealth?.lowStock ?? warehouses.filter(isLowStock).length;
+  const fulfilledOrders = stats?.ordersByStatus?.fulfilled ?? 0;
   const activeRoutes = routes.length;
 
   // ─── Render ─────────────────────────────────────────────
@@ -773,12 +781,14 @@ export default function ControlTowerDashboard() {
             label="Active Warehouses"
             value={activeWarehouses}
             accentColor="var(--color-accent)"
+            loading={statsLoading}
           />
           <KpiCard
             icon={<PackageIcon />}
-            label="SKUs Tracked"
-            value={totalSkus}
+            label="Total Orders"
+            value={totalOrders}
             accentColor="var(--color-success)"
+            loading={statsLoading}
           />
           <KpiCard
             icon={<AlertTriangleIcon />}
@@ -787,12 +797,14 @@ export default function ControlTowerDashboard() {
             accentColor={lowStockCount > 0 ? 'var(--color-warning)' : 'var(--color-success)'}
             onClick={() => setHighlightLowStock((prev) => !prev)}
             isActive={highlightLowStock}
+            loading={statsLoading}
           />
           <KpiCard
             icon={<RouteIcon />}
-            label="Active Routes"
-            value={activeRoutes}
-            accentColor="var(--color-accent)"
+            label="Fulfilled"
+            value={fulfilledOrders}
+            accentColor="var(--color-success)"
+            loading={statsLoading}
           />
         </div>
       ) : null}
