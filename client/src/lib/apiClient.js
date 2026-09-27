@@ -185,6 +185,44 @@ export function getCategories() {
   return request('/products/categories');
 }
 
+// ─── Host Product Management API Methods ───────────────────
+
+/**
+ * Create a new product in the catalog.
+ * Requires Host JWT.
+ * @param {Object} data - { sku, name, price, weight_kg, description?, category?, image_url?, length_cm?, width_cm?, height_cm? }
+ */
+export function createProduct(data) {
+  return request('/products', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+/**
+ * Update an existing product by SKU.
+ * Requires Host JWT. Only provided fields are updated.
+ * @param {string} sku
+ * @param {Object} data - partial product fields
+ */
+export function updateProduct(sku, data) {
+  return request(`/products/${sku}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+/**
+ * Delete a product by SKU.
+ * Requires Host JWT.
+ * @param {string} sku
+ */
+export function deleteProduct(sku) {
+  return request(`/products/${sku}`, {
+    method: 'DELETE',
+  });
+}
+
 // ─── Customer Order API Methods ────────────────────────────
 
 /**
