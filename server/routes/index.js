@@ -13,6 +13,7 @@ const warehousesRouter = require('./warehouses');
 const webhooksRouter = require('./webhooks');
 const dashboardRouter = require('./dashboard');
 const productsRouter = require('./products');
+const inventoryRouter = require('./inventory');
 
 const router = Router();
 
@@ -36,6 +37,9 @@ router.use('/webhooks', webhooksRouter);
 
 // Dashboard routes (stub — business logic in Week 3)
 router.use('/dashboard', dashboardRouter);
+
+// Inventory management (Host-only — stock adjustments)
+router.use('/inventory', inventoryRouter);
 
 module.exports = router;
 

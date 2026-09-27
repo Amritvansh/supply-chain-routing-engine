@@ -31,6 +31,7 @@ import Analytics from './pages/Analytics';
 import HowItWorks from './pages/HowItWorks';
 import HostProducts from './pages/HostProducts';
 import HostWarehouses from './pages/HostWarehouses';
+import HostInventory from './pages/HostInventory';
 import CustomerShop from './pages/CustomerShop';
 import CheckoutPage from './pages/CheckoutPage';
 import CustomerOrders from './pages/CustomerOrders';
@@ -60,6 +61,7 @@ export default function App() {
               <Route path="host/how-it-works" element={<HowItWorks />} />
               <Route path="host/products" element={<HostProducts />} />
               <Route path="host/warehouses" element={<HostWarehouses />} />
+              <Route path="host/inventory" element={<HostInventory />} />
             </Route>
 
             {/* Customer-protected routes (Store Experience) */}

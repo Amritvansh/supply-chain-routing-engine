@@ -286,3 +286,26 @@ export function getMyOrders() {
 export function trackOrder(id) {
   return request(`/orders/track/${id}`);
 }
+
+// ─── Host Inventory Management API Methods ─────────────────
+
+/**
+ * Fetch all inventory rows with product and warehouse names.
+ * Requires Host JWT.
+ */
+export function getInventory() {
+  return request('/inventory');
+}
+
+/**
+ * Upsert stock for a given SKU at a given warehouse.
+ * Requires Host JWT.
+ * @param {Object} data - { sku, warehouse_id, quantity }
+ */
+export function adjustInventory(data) {
+  return request('/inventory/adjust', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
