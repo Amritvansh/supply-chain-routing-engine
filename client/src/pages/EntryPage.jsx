@@ -26,7 +26,7 @@ export default function EntryPage() {
       if (user.role === 'host') {
         navigate('/host/dashboard', { replace: true });
       } else {
-        navigate('/shop', { replace: true });
+        navigate('/customer/shop', { replace: true });
       }
     }
   }, [user, loading, navigate]);

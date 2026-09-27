@@ -2,6 +2,9 @@
  * Order Routes
  *
  * POST /api/v1/orders/checkout    — Deterministic routing + ACID checkout (SYNC, no AI)
+ * POST /api/v1/orders/quote       — Delivery fee preview (read-only, no locks)
+ * GET  /api/v1/orders/my-orders   — Customer's order history (auth required)
+ * GET  /api/v1/orders/track/:id   — Customer-facing order tracking
  * GET  /api/v1/orders/:id         — Order + items + shipments
  * GET  /api/v1/orders/:id/explain — Cached or freshly-generated AI explanation (ASYNC)
  * POST /api/v1/orders/flash-test  — Server-side flash-sale stress simulation
@@ -16,6 +19,12 @@
  *   - Zod request validation (replaces manual inline validation)
  *   - Multi-shipment /explain support (per-group explanations for split orders)
  *   - Structured Pino logging with request ID correlation across lifecycle
+ *
+ * Phase 2 additions:
+ *   - POST /quote — delivery fee estimate without checkout
+ *   - GET /my-orders — customer order history
+ *   - GET /track/:id — customer-safe order tracking
+ *   - Checkout passes customer fields (userId, name, phone, address) to ACID transaction
  */
 'use strict';
 
@@ -39,6 +48,7 @@ const {
 
 // Middleware
 const { checkoutRateLimiter } = require('../middleware/rateLimiter');
+const { verifyToken, requireCustomer } = require('../middleware/authMiddleware');
 const {
   validateCheckoutBody,
   validateFlashTestBody,
@@ -47,6 +57,25 @@ const {
 } = require('../middleware/validators');
 
 const router = Router();
+
+/**
+ * Optionally extract user from JWT if present.
+ * Unlike verifyToken, this does NOT reject unauthenticated requests.
+ */
+function optionalAuth(req, res, next) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return next();
+  }
+  const jwt = require('jsonwebtoken');
+  const env = require('../config/env');
+  try {
+    req.user = jwt.verify(authHeader.split(' ')[1], env.JWT_SECRET);
+  } catch (_) {
+    // Invalid token — proceed as unauthenticated
+  }
+  next();
+}
 
 /**
  * Maximum concurrency for flash-test endpoint.
@@ -69,6 +98,7 @@ const FLASH_TEST_MAX_CONCURRENCY = 50;
  */
 router.post('/checkout',
   checkoutRateLimiter,
+  optionalAuth,
   validateIdempotencyKey,
   validateCheckoutBody,
   async (req, res, next) => {
@@ -225,6 +255,13 @@ router.post('/checkout',
         customerLng,
         items,
         routingDecision: routingResult,
+        // Phase 2: pass customer-identifying fields if present
+        userId: req.user?.id || req.body.userId || null,
+        customerName: req.body.customerName || null,
+        customerPhone: req.body.customerPhone || null,
+        shippingAddress: req.body.shippingAddress || null,
+        pincode: req.body.pincode || null,
+        totalAmount: req.body.totalAmount || null,
       });
 
       // ── Step 7: Handle idempotency replay ───────────────────
@@ -289,6 +326,218 @@ router.post('/checkout',
       for (const lock of acquiredLocks) {
         await releaseLock(lock.sku, lock.token);
       }
+    }
+  }
+);
+
+// ─── GET /api/v1/orders/my-orders ───────────────────────────────
+/**
+ * Returns all orders belonging to the authenticated customer.
+ * Protected: requires customer JWT.
+ *
+ * Customer-safe: only returns clean order summary data.
+ *
+ * NOTE: This route MUST be registered before /:id to prevent
+ * Express from matching 'my-orders' as a UUID parameter.
+ */
+router.get('/my-orders',
+  verifyToken,
+  requireCustomer,
+  async (req, res, next) => {
+    try {
+      const userId = req.user.id;
+      const log = req.log || logger;
+
+      log.info({ userId }, 'My-orders: fetching');
+
+      const ordersResult = await pool.query(
+        `SELECT
+           o.id, o.status, o.created_at, o.customer_name,
+           o.shipping_address, o.pincode, o.total_amount,
+           COUNT(oi.id)::int AS item_count
+         FROM orders o
+         LEFT JOIN order_items oi ON oi.order_id = o.id
+         WHERE o.user_id = $1
+         GROUP BY o.id
+         ORDER BY o.created_at DESC`,
+        [userId]
+      );
+
+      const orders = ordersResult.rows.map(row => ({
+        id: row.id,
+        status: row.status,
+        createdAt: row.created_at,
+        customerName: row.customer_name,
+        shippingAddress: row.shipping_address,
+        pincode: row.pincode,
+        totalAmount: row.total_amount ? parseFloat(row.total_amount) : null,
+        itemCount: row.item_count,
+      }));
+
+      res.status(200).json({ orders, count: orders.length });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// ─── GET /api/v1/orders/track/:id ───────────────────────────────
+/**
+ * Customer-facing order tracking.
+ *
+ * Returns a clean tracking view with:
+ *   - Order summary (ID, status, date, address)
+ *   - Item list with product names and prices
+ *   - Visual delivery timeline steps
+ *
+ * NEVER exposes: warehouse scores, AI explanations, routing internals,
+ * cost breakdowns, depletion penalties, or Redis lock details.
+ *
+ * NOTE: This route MUST be registered before /:id.
+ */
+router.get('/track/:id',
+  async (req, res, next) => {
+    try {
+      const { id } = req.params;
+      const log = req.log || logger;
+
+      // Validate UUID format
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(id)) {
+        return res.status(400).json({
+          error: {
+            code: 'INVALID_ID',
+            message: 'Order ID must be a valid UUID.',
+          },
+        });
+      }
+
+      // Fetch order
+      const orderResult = await pool.query(
+        `SELECT id, status, created_at, customer_name, customer_phone,
+                shipping_address, pincode, total_amount
+         FROM orders WHERE id = $1`,
+        [id]
+      );
+
+      if (orderResult.rows.length === 0) {
+        return res.status(404).json({
+          error: {
+            code: 'ORDER_NOT_FOUND',
+            message: `Order ${id} not found.`,
+          },
+        });
+      }
+
+      const order = orderResult.rows[0];
+
+      // Fetch items with product names and prices
+      const itemsResult = await pool.query(
+        `SELECT oi.sku, s.name, s.price, s.image_url, oi.qty
+         FROM order_items oi
+         JOIN skus s ON s.sku = oi.sku
+         WHERE oi.order_id = $1
+         ORDER BY s.name`,
+        [id]
+      );
+
+      // Fetch shipment (for delivery distance / estimated days)
+      const shipmentResult = await pool.query(
+        `SELECT sh.distance_km, sh.total_cost, sh.box_size, sh.created_at
+         FROM shipments sh
+         WHERE sh.order_id = $1
+         ORDER BY sh.created_at ASC
+         LIMIT 1`,
+        [id]
+      );
+
+      // Check webhook events for status timeline
+      const webhookResult = await pool.query(
+        `SELECT we.status, we.received_at
+         FROM webhook_events we
+         JOIN shipments sh ON sh.id = we.shipment_id
+         WHERE sh.order_id = $1
+         ORDER BY we.received_at ASC`,
+        [id]
+      );
+
+      // Build delivery timeline
+      const statusSteps = [
+        'ORDER_PLACED',
+        'INVENTORY_ALLOCATED',
+        'PROCESSING',
+        'DISPATCHED',
+        'IN_TRANSIT',
+        'DELIVERED',
+      ];
+
+      // Map order status and webhook events to timeline
+      const completedSteps = new Set(['ORDER_PLACED']);
+      if (['ROUTED', 'SPLIT_ROUTED', 'FULFILLED'].includes(order.status)) {
+        completedSteps.add('INVENTORY_ALLOCATED');
+      }
+
+      // Map webhook statuses to timeline steps
+      for (const event of webhookResult.rows) {
+        if (event.status === 'PICKED_UP') {
+          completedSteps.add('PROCESSING');
+          completedSteps.add('DISPATCHED');
+        }
+        if (event.status === 'IN_TRANSIT') {
+          completedSteps.add('PROCESSING');
+          completedSteps.add('DISPATCHED');
+          completedSteps.add('IN_TRANSIT');
+        }
+        if (event.status === 'DELIVERED') {
+          completedSteps.add('PROCESSING');
+          completedSteps.add('DISPATCHED');
+          completedSteps.add('IN_TRANSIT');
+          completedSteps.add('DELIVERED');
+        }
+      }
+
+      const timeline = statusSteps.map(step => ({
+        step,
+        label: step.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+        completed: completedSteps.has(step),
+      }));
+
+      // Calculate estimated delivery
+      let estimatedDays = null;
+      let deliveryFee = null;
+      if (shipmentResult.rows.length > 0) {
+        const distanceKm = parseFloat(shipmentResult.rows[0].distance_km);
+        estimatedDays = distanceKm < 100 ? 1 : distanceKm < 500 ? 2 : distanceKm < 1000 ? 3 : 5;
+        deliveryFee = parseFloat(shipmentResult.rows[0].total_cost);
+      }
+
+      const items = itemsResult.rows.map(row => ({
+        sku: row.sku,
+        name: row.name,
+        price: parseFloat(row.price),
+        imageUrl: row.image_url,
+        qty: row.qty,
+        lineTotal: parseFloat(row.price) * row.qty,
+      }));
+
+      res.status(200).json({
+        order: {
+          id: order.id,
+          status: order.status,
+          createdAt: order.created_at,
+          customerName: order.customer_name,
+          customerPhone: order.customer_phone,
+          shippingAddress: order.shipping_address,
+          pincode: order.pincode,
+          totalAmount: order.total_amount ? parseFloat(order.total_amount) : null,
+        },
+        items,
+        deliveryFee,
+        estimatedDays,
+        timeline,
+      });
+    } catch (err) {
+      next(err);
     }
   }
 );
@@ -599,6 +848,167 @@ function buildRoutingContext(shipmentRow, allWarehouses) {
       })),
   };
 }
+
+// ─── POST /api/v1/orders/quote ──────────────────────────────────
+/**
+ * Delivery fee preview — read-only.
+ *
+ * Runs the routing engine and bin-packing to estimate the delivery fee
+ * for a given set of items and customer location. Does NOT acquire locks,
+ * mutate inventory, or create an order. Customer-safe.
+ */
+router.post('/quote',
+  validateCheckoutBody,
+  async (req, res, next) => {
+    try {
+      const { customerLat, customerLng, items } = req.body;
+      const log = req.log || logger;
+
+      log.info({ itemCount: items.length }, 'Quote: request received');
+
+      // ── Step 1: Resolve warehouses with inventory ──────────
+      const warehouseResult = await pool.query(`
+        SELECT
+          w.id, w.name, w.lat, w.lng, w.active,
+          i.sku, i.available_qty
+        FROM warehouses w
+        JOIN inventories i ON i.warehouse_id = w.id
+        WHERE w.active = true
+        ORDER BY w.name
+      `);
+
+      const warehouseMap = new Map();
+      for (const row of warehouseResult.rows) {
+        if (!warehouseMap.has(row.id)) {
+          warehouseMap.set(row.id, {
+            id: row.id,
+            name: row.name,
+            lat: parseFloat(row.lat),
+            lng: parseFloat(row.lng),
+            inventory: {},
+          });
+        }
+        warehouseMap.get(row.id).inventory[row.sku] = row.available_qty;
+      }
+
+      const warehouses = Array.from(warehouseMap.values());
+
+      if (warehouses.length === 0) {
+        return res.status(200).json({
+          deliveryFee: null,
+          subtotal: null,
+          total: null,
+          estimatedDays: null,
+          message: 'No active warehouses available for delivery estimation.',
+        });
+      }
+
+      // ── Step 2: Calculate distances ────────────────────────
+      const customerLocation = { lat: customerLat, lng: customerLng };
+      for (const wh of warehouses) {
+        const result = await getDistance(
+          { lat: wh.lat, lng: wh.lng },
+          customerLocation
+        );
+        wh.distanceKm = result.distanceKm;
+      }
+
+      // ── Step 3: Fetch SKU dimensions + prices ──────────────
+      const skuList = items.map(i => i.sku);
+      const skuResult = await pool.query(
+        `SELECT sku, name, length_cm, width_cm, height_cm, weight_kg, price
+         FROM skus WHERE sku = ANY($1)`,
+        [skuList]
+      );
+
+      const skuMap = new Map();
+      for (const row of skuResult.rows) {
+        skuMap.set(row.sku, row);
+      }
+
+      // Verify all SKUs exist
+      for (const item of items) {
+        if (!skuMap.has(item.sku)) {
+          return res.status(400).json({
+            error: {
+              code: 'UNKNOWN_SKU',
+              message: `SKU "${item.sku}" does not exist.`,
+            },
+          });
+        }
+      }
+
+      // Build order items with dimensions
+      const orderItems = items.map(item => {
+        const sku = skuMap.get(item.sku);
+        return {
+          sku: item.sku,
+          name: sku.name,
+          length_cm: sku.length_cm,
+          width_cm: sku.width_cm,
+          height_cm: sku.height_cm,
+          weight_kg: parseFloat(sku.weight_kg),
+          qty: item.qty,
+        };
+      });
+
+      // ── Step 4: Run routing engine (read-only) ─────────────
+      const routingResult = selectOptimalWarehouse({
+        warehouses,
+        orderItems,
+      });
+
+      if (routingResult.status !== 'ROUTED' &&
+          routingResult.status !== 'SPLIT_ROUTED' &&
+          routingResult.status !== 'PARTIAL_SPLIT') {
+        return res.status(200).json({
+          deliveryFee: null,
+          subtotal: null,
+          total: null,
+          estimatedDays: null,
+          message: routingResult.message || 'Could not estimate delivery.',
+        });
+      }
+
+      // ── Step 5: Calculate subtotal + delivery fee ───────────
+      const deliveryFee = Math.round(routingResult.chosen.totalCost * 100) / 100;
+
+      let subtotal = 0;
+      const itemBreakdown = items.map(item => {
+        const sku = skuMap.get(item.sku);
+        const lineTotal = parseFloat(sku.price) * item.qty;
+        subtotal += lineTotal;
+        return {
+          sku: item.sku,
+          name: sku.name,
+          price: parseFloat(sku.price),
+          qty: item.qty,
+          lineTotal,
+        };
+      });
+
+      subtotal = Math.round(subtotal * 100) / 100;
+      const total = Math.round((subtotal + deliveryFee) * 100) / 100;
+
+      // Estimate delivery days based on distance
+      const distanceKm = routingResult.chosen.distanceKm;
+      const estimatedDays = distanceKm < 100 ? 1 : distanceKm < 500 ? 2 : distanceKm < 1000 ? 3 : 5;
+
+      log.info({ deliveryFee, subtotal, total, distanceKm }, 'Quote: calculated');
+
+      res.status(200).json({
+        deliveryFee,
+        subtotal,
+        total,
+        estimatedDays,
+        items: itemBreakdown,
+        boxSize: routingResult.chosen.boxSize,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
 
 // ─── POST /api/v1/orders/flash-test ─────────────────────────────
 /**

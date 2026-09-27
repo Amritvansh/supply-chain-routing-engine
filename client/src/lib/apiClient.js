@@ -156,3 +156,59 @@ export function sendLogisticsWebhook(data) {
   });
 }
 
+// ─── Product Catalog API Methods ───────────────────────────
+
+/**
+ * List products with optional search and category filter.
+ * @param {{ q?: string, category?: string }} params
+ */
+export function getProducts(params = {}) {
+  const qs = new URLSearchParams();
+  if (params.q) qs.set('q', params.q);
+  if (params.category) qs.set('category', params.category);
+  const query = qs.toString();
+  return request(`/products${query ? `?${query}` : ''}`);
+}
+
+/**
+ * Fetch a single product by SKU.
+ * @param {string} sku
+ */
+export function getProduct(sku) {
+  return request(`/products/${sku}`);
+}
+
+/**
+ * Fetch all product categories.
+ */
+export function getCategories() {
+  return request('/products/categories');
+}
+
+// ─── Customer Order API Methods ────────────────────────────
+
+/**
+ * Get a delivery quote without placing an order.
+ * @param {Object} data - { customerLat, customerLng, items }
+ */
+export function getQuote(data) {
+  return request('/orders/quote', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+/**
+ * Fetch the authenticated customer's order history.
+ */
+export function getMyOrders() {
+  return request('/orders/my-orders');
+}
+
+/**
+ * Fetch customer-facing order tracking data.
+ * @param {string} id - order UUID
+ */
+export function trackOrder(id) {
+  return request(`/orders/track/${id}`);
+}

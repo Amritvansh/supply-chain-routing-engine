@@ -50,6 +50,12 @@ const {
  * @param {Object} params.routingDecision - Output from routingEngine:
  *   { chosen: { warehouseId, boxSize, totalCost, distanceKm, costBreakdown },
  *     alternatives: [...], packing: {...} }
+ * @param {string} [params.userId] - Authenticated customer's user ID
+ * @param {string} [params.customerName] - Customer's full name
+ * @param {string} [params.customerPhone] - Customer's phone number
+ * @param {string} [params.shippingAddress] - Full shipping address text
+ * @param {string} [params.pincode] - Delivery PIN code
+ * @param {number} [params.totalAmount] - Final order total (product + delivery)
  *
  * @returns {Promise<Object|IdempotencyReplay>} The created order result, or
  *   an IdempotencyReplay instance if the key was already used.
@@ -63,6 +69,12 @@ async function executeCheckout({
   customerLng,
   items,
   routingDecision,
+  userId = null,
+  customerName = null,
+  customerPhone = null,
+  shippingAddress = null,
+  pincode = null,
+  totalAmount = null,
 }) {
   const client = await pool.connect();
 
@@ -128,10 +140,17 @@ async function executeCheckout({
 
     // ── Step 3: Insert order ───────────────────────────────────
     const orderResult = await client.query(
-      `INSERT INTO orders (customer_lat, customer_lng, status, idempotency_key)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id, customer_lat, customer_lng, status, idempotency_key, created_at`,
-      [customerLat, customerLng, 'ROUTED', idempotencyKey]
+      `INSERT INTO orders (
+         customer_lat, customer_lng, status, idempotency_key,
+         user_id, customer_name, customer_phone, shipping_address, pincode, total_amount
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       RETURNING id, customer_lat, customer_lng, status, idempotency_key, created_at,
+                 user_id, customer_name, customer_phone, shipping_address, pincode, total_amount`,
+      [
+        customerLat, customerLng, 'ROUTED', idempotencyKey,
+        userId, customerName, customerPhone, shippingAddress, pincode, totalAmount,
+      ]
     );
     const order = orderResult.rows[0];
 

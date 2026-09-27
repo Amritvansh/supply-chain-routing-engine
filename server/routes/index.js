@@ -12,6 +12,7 @@ const ordersRouter = require('./orders');
 const warehousesRouter = require('./warehouses');
 const webhooksRouter = require('./webhooks');
 const dashboardRouter = require('./dashboard');
+const productsRouter = require('./products');
 
 const router = Router();
 
@@ -20,6 +21,9 @@ router.use('/health', healthRouter);
 
 // Authentication (register, login, profile)
 router.use('/auth', authRouter);
+
+// Product catalog (customer-facing, public)
+router.use('/products', productsRouter);
 
 // Order routes (stubs — business logic in Week 2-3)
 router.use('/orders', ordersRouter);

@@ -3,12 +3,13 @@
  *
  * Populates the database with realistic sample data for development
  * and testing. Inserts:
+ *   - 2 default users (host + customer)
  *   - 5 warehouses (spread across India)
- *   - 10 SKUs (varied dimensions and weights)
+ *   - 10 SKUs (varied dimensions, weights, prices, and categories)
  *   - Inventory rows per warehouse/SKU pair with mixed stock levels
  *
- * The seed is safely repeatable: it uses INSERT ... ON CONFLICT DO NOTHING
- * so running it multiple times won't create duplicate rows.
+ * The seed is safely repeatable: it uses INSERT ... ON CONFLICT DO UPDATE
+ * so running it multiple times hydrates any new columns.
  *
  * Usage:
  *   DATABASE_URL=postgres://... node db/seed.js
@@ -35,16 +36,96 @@ const warehouses = [
 ];
 
 const skus = [
-  { sku: 'SKU-PHONE-001',    name: 'Smartphone Pro 15',         length_cm: 16,  width_cm: 8,   height_cm: 1,   weight_kg: 0.2  },
-  { sku: 'SKU-LAPTOP-002',   name: 'UltraBook 14"',             length_cm: 35,  width_cm: 25,  height_cm: 2,   weight_kg: 1.5  },
-  { sku: 'SKU-HEADPH-003',   name: 'Wireless Noise-Cancel Headphones', length_cm: 20, width_cm: 18, height_cm: 8, weight_kg: 0.35 },
-  { sku: 'SKU-TABLET-004',   name: 'Digital Tablet 11"',        length_cm: 25,  width_cm: 18,  height_cm: 1,   weight_kg: 0.5  },
-  { sku: 'SKU-MONITOR-005',  name: '27" 4K Monitor',            length_cm: 65,  width_cm: 45,  height_cm: 15,  weight_kg: 6.5  },
-  { sku: 'SKU-KEYBOARD-006', name: 'Mechanical Keyboard',       length_cm: 45,  width_cm: 15,  height_cm: 4,   weight_kg: 0.9  },
-  { sku: 'SKU-MOUSE-007',    name: 'Ergonomic Wireless Mouse',  length_cm: 12,  width_cm: 7,   height_cm: 4,   weight_kg: 0.1  },
-  { sku: 'SKU-CHARGER-008',  name: '100W USB-C Charger',        length_cm: 8,   width_cm: 8,   height_cm: 3,   weight_kg: 0.25 },
-  { sku: 'SKU-SPEAKER-009',  name: 'Portable Bluetooth Speaker',length_cm: 22,  width_cm: 10,  height_cm: 10,  weight_kg: 0.7  },
-  { sku: 'SKU-CAMERA-010',   name: 'Mirrorless Camera Body',    length_cm: 14,  width_cm: 10,  height_cm: 8,   weight_kg: 0.65 },
+  {
+    sku: 'SKU-PHONE-001',
+    name: 'Smartphone Pro 15',
+    length_cm: 16, width_cm: 8, height_cm: 1, weight_kg: 0.2,
+    price: 29999,
+    category: 'Smartphones',
+    description: 'Flagship smartphone with 6.7" AMOLED display, 108MP triple camera system, 5G connectivity, and all-day battery life. Perfect for power users who demand the best.',
+    image_url: 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=600&h=600&fit=crop',
+  },
+  {
+    sku: 'SKU-LAPTOP-002',
+    name: 'UltraBook 14"',
+    length_cm: 35, width_cm: 25, height_cm: 2, weight_kg: 1.5,
+    price: 49999,
+    category: 'Laptops',
+    description: 'Ultra-thin 14" laptop with Intel i7 processor, 16GB RAM, 512GB SSD, and stunning Retina display. Weighing just 1.5kg, it is the perfect companion for professionals on the go.',
+    image_url: 'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=600&h=600&fit=crop',
+  },
+  {
+    sku: 'SKU-HEADPH-003',
+    name: 'Wireless Noise-Cancel Headphones',
+    length_cm: 20, width_cm: 18, height_cm: 8, weight_kg: 0.35,
+    price: 4999,
+    category: 'Audio',
+    description: 'Premium over-ear headphones with industry-leading active noise cancellation, 30-hour battery, Hi-Res Audio support, and plush memory-foam ear cushions.',
+    image_url: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600&h=600&fit=crop',
+  },
+  {
+    sku: 'SKU-TABLET-004',
+    name: 'Digital Tablet 11"',
+    length_cm: 25, width_cm: 18, height_cm: 1, weight_kg: 0.5,
+    price: 24999,
+    category: 'Laptops',
+    description: 'Versatile 11" tablet with M-series chip, Liquid Retina XDR display, stylus support, and all-day battery. Ideal for creativity and entertainment.',
+    image_url: 'https://images.unsplash.com/photo-1544244015-0df4b3ffc6b0?w=600&h=600&fit=crop',
+  },
+  {
+    sku: 'SKU-MONITOR-005',
+    name: '27" 4K Monitor',
+    length_cm: 65, width_cm: 45, height_cm: 15, weight_kg: 6.5,
+    price: 34999,
+    category: 'Monitors',
+    description: 'Professional-grade 27" 4K UHD monitor with 99% sRGB color accuracy, USB-C connectivity, adjustable ergonomic stand, and eye-care technology.',
+    image_url: 'https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?w=600&h=600&fit=crop',
+  },
+  {
+    sku: 'SKU-KEYBOARD-006',
+    name: 'Mechanical Keyboard',
+    length_cm: 45, width_cm: 15, height_cm: 4, weight_kg: 0.9,
+    price: 3499,
+    category: 'Peripherals',
+    description: 'RGB mechanical keyboard with hot-swappable switches, aircraft-grade aluminium frame, PBT keycaps, and customizable macro keys for gaming and productivity.',
+    image_url: 'https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=600&h=600&fit=crop',
+  },
+  {
+    sku: 'SKU-MOUSE-007',
+    name: 'Ergonomic Wireless Mouse',
+    length_cm: 12, width_cm: 7, height_cm: 4, weight_kg: 0.1,
+    price: 1499,
+    category: 'Peripherals',
+    description: 'Ergonomic wireless mouse with 16000 DPI sensor, silent clicks, USB-C fast charging, and multi-device Bluetooth support for seamless workflow.',
+    image_url: 'https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?w=600&h=600&fit=crop',
+  },
+  {
+    sku: 'SKU-CHARGER-008',
+    name: '100W USB-C Charger',
+    length_cm: 8, width_cm: 8, height_cm: 3, weight_kg: 0.25,
+    price: 2499,
+    category: 'Peripherals',
+    description: 'Compact 100W GaN USB-C charger with 4 ports, intelligent power distribution, and universal compatibility. Charge your laptop, phone, and tablet simultaneously.',
+    image_url: 'https://images.unsplash.com/photo-1583863788434-e58a36330cf0?w=600&h=600&fit=crop',
+  },
+  {
+    sku: 'SKU-SPEAKER-009',
+    name: 'Portable Bluetooth Speaker',
+    length_cm: 22, width_cm: 10, height_cm: 10, weight_kg: 0.7,
+    price: 3999,
+    category: 'Audio',
+    description: 'Rugged portable speaker with 360° sound, IP67 waterproof rating, 20-hour battery, and deep bass boost. Take the party anywhere.',
+    image_url: 'https://images.unsplash.com/photo-1608043152269-423dbba4e7e1?w=600&h=600&fit=crop',
+  },
+  {
+    sku: 'SKU-CAMERA-010',
+    name: 'Mirrorless Camera Body',
+    length_cm: 14, width_cm: 10, height_cm: 8, weight_kg: 0.65,
+    price: 44999,
+    category: 'Monitors',
+    description: 'Professional mirrorless camera with 45MP full-frame sensor, 8K video recording, advanced AF with eye-tracking, and weather-sealed magnesium alloy body.',
+    image_url: 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=600&h=600&fit=crop',
+  },
 ];
 
 /**
@@ -132,20 +213,29 @@ async function seed() {
       }
     }
 
-    // ── Insert SKUs ───────────────────────────────────────────────────────
+    // ── Insert / Update SKUs ──────────────────────────────────────────────
     console.log('\nSeeding SKUs...');
     for (const s of skus) {
-      const { rowCount } = await client.query(
-        `INSERT INTO skus (sku, name, length_cm, width_cm, height_cm, weight_kg)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         ON CONFLICT (sku) DO NOTHING`,
-        [s.sku, s.name, s.length_cm, s.width_cm, s.height_cm, s.weight_kg]
+      const result = await client.query(
+        `INSERT INTO skus (sku, name, length_cm, width_cm, height_cm, weight_kg, price, category, image_url, description)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         ON CONFLICT (sku) DO UPDATE SET
+           name        = EXCLUDED.name,
+           length_cm   = EXCLUDED.length_cm,
+           width_cm    = EXCLUDED.width_cm,
+           height_cm   = EXCLUDED.height_cm,
+           weight_kg   = EXCLUDED.weight_kg,
+           price       = EXCLUDED.price,
+           category    = EXCLUDED.category,
+           image_url   = EXCLUDED.image_url,
+           description = EXCLUDED.description`,
+        [
+          s.sku, s.name, s.length_cm, s.width_cm, s.height_cm, s.weight_kg,
+          s.price, s.category, s.image_url, s.description,
+        ]
       );
-      if (rowCount > 0) {
-        console.log(`  INSERT sku: ${s.sku} (${s.name})`);
-      } else {
-        console.log(`  SKIP  sku: ${s.sku} (already exists)`);
-      }
+      // ON CONFLICT DO UPDATE always returns rowCount = 1
+      console.log(`  UPSERT sku: ${s.sku} (${s.name}) — ₹${s.price.toLocaleString('en-IN')}`);
     }
 
     // ── Insert Inventory ──────────────────────────────────────────────────
