@@ -223,7 +223,43 @@ export function deleteProduct(sku) {
   });
 }
 
-// ─── Customer Order API Methods ────────────────────────────
+// ─── Host Warehouse Management API Methods ─────────────────
+
+/**
+ * Create a new warehouse.
+ * Requires Host JWT.
+ * @param {Object} data - { name, lat, lng, id?, active? }
+ */
+export function createWarehouse(data) {
+  return request('/warehouses', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+/**
+ * Update an existing warehouse by ID.
+ * Requires Host JWT. Only provided fields are updated.
+ * @param {string} id - warehouse UUID
+ * @param {Object} data - partial warehouse fields
+ */
+export function updateWarehouse(id, data) {
+  return request(`/warehouses/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+/**
+ * Deactivate a warehouse by ID (soft delete).
+ * Requires Host JWT.
+ * @param {string} id - warehouse UUID
+ */
+export function deleteWarehouse(id) {
+  return request(`/warehouses/${id}`, {
+    method: 'DELETE',
+  });
+}
 
 /**
  * Get a delivery quote without placing an order.
