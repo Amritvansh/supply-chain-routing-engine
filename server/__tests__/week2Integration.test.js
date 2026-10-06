@@ -17,6 +17,12 @@
 
 'use strict';
 
+jest.mock('../middleware/authMiddleware', () => ({
+  verifyToken: (req, res, next) => next(),
+  requireHost: (req, res, next) => next(),
+  requireCustomer: (req, res, next) => next(),
+}));
+
 // ═══════════════════════════════════════════════════════════════
 // §1 — HAVERSINE UNIT TESTS
 // ═══════════════════════════════════════════════════════════════
@@ -721,7 +727,10 @@ describe('POST /api/v1/webhooks/logistics', () => {
           status: 'DELIVERED',
           received_at: '2026-08-18T00:02:00Z',
         }],
-      });
+      })
+      .mockResolvedValueOnce({ rows: [{ order_id: 'order-123' }] }) // propagate: get order_id
+      .mockResolvedValueOnce({ rows: [{ pending: 0 }] })            // propagate: pending count
+      .mockResolvedValueOnce({ rowCount: 1 });                      // propagate: update order
 
     const res = await request(app)
       .post('/api/v1/webhooks/logistics')

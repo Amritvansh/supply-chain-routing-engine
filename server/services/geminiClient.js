@@ -48,6 +48,11 @@ const RETRY_BASE_DELAY_MS = 500;
  * @returns {string}
  */
 function buildPrompt(routingResult) {
+  // Detect split-shipment context
+  if (routingResult.shipmentGroups || routingResult.fulfillmentType === 'SPLIT_SHIPMENT') {
+    return buildSplitShipmentPrompt(routingResult);
+  }
+
   const { chosen, alternatives } = routingResult;
 
   const altDescriptions = alternatives
@@ -71,6 +76,27 @@ function buildPrompt(routingResult) {
 }
 
 /**
+ * Build a prompt specifically for split-shipment explanations.
+ *
+ * @param {Object} routingResult - Routing context with shipmentGroups
+ * @returns {string}
+ */
+function buildSplitShipmentPrompt(routingResult) {
+  const groups = routingResult.shipmentGroups || [];
+  const groupDescriptions = groups.map((g, i) => {
+    const items = (g.items || []).map(it => `${it.name || it.sku} ×${it.qty}`).join(', ');
+    return `Shipment ${i + 1}: Warehouse ${g.warehouseName} (${g.distanceKm}km) — Items: [${items}], box: ${g.boxSize}, cost: ${g.totalCost}`;
+  }).join('. ');
+
+  return (
+    `A warehouse routing engine split an order into ${groups.length} shipments because no single warehouse ` +
+    `had sufficient inventory to fulfill the complete order. ${groupDescriptions}. ` +
+    `In 2-3 plain-language customer-friendly sentences, explain why the order was split across these warehouses, ` +
+    `referencing which products or quantities go to which warehouse. No greetings, no markdown, no disclaimers.`
+  );
+}
+
+/**
  * Build a deterministic fallback explanation from routing data.
  * Used when Gemini is unavailable, times out, or hits quota.
  *
@@ -78,6 +104,11 @@ function buildPrompt(routingResult) {
  * @returns {string}
  */
 function buildFallbackExplanation(routingResult) {
+  // Detect split-shipment context
+  if (routingResult.shipmentGroups || routingResult.fulfillmentType === 'SPLIT_SHIPMENT') {
+    return buildSplitFallbackExplanation(routingResult);
+  }
+
   const { chosen, alternatives } = routingResult;
   const cb = chosen.costBreakdown;
 
@@ -99,6 +130,31 @@ function buildFallbackExplanation(routingResult) {
     `over ${closestAlt.name} (${closestAlt.distanceKm}km, total cost ${closestAlt.totalCost}) ` +
     `because the combined distance cost (${cb.distanceCost}), packaging cost (${cb.packagingCost}), ` +
     `and depletion penalty (${cb.depletionPenalty}) resulted in a lower overall routing score.`
+  );
+}
+
+/**
+ * Build a deterministic fallback for split-shipment explanations.
+ *
+ * @param {Object} routingResult - Routing context with shipmentGroups
+ * @returns {string}
+ */
+function buildSplitFallbackExplanation(routingResult) {
+  const groups = routingResult.shipmentGroups || [];
+
+  if (groups.length === 0) {
+    return 'This order required a split shipment, but no detailed group information is available.';
+  }
+
+  const parts = groups.map((g, i) => {
+    const items = (g.items || []).map(it => `${it.name || it.sku} ×${it.qty}`).join(', ');
+    return `Shipment ${i + 1} ships from ${g.warehouseName} (${g.distanceKm}km): ${items}`;
+  });
+
+  return (
+    `Your order was split into ${groups.length} shipments because no single warehouse had all the ` +
+    `required inventory. ${parts.join('. ')}. ` +
+    `Each shipment is packaged and shipped independently for the fastest possible delivery.`
   );
 }
 
@@ -255,6 +311,8 @@ module.exports = {
   generateExplanation,
   buildPrompt,
   buildFallbackExplanation,
+  buildSplitShipmentPrompt,
+  buildSplitFallbackExplanation,
   callGemini,
   GEMINI_MODEL,
   MAX_RETRIES,

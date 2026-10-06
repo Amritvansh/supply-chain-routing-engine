@@ -124,6 +124,65 @@ function MapPicker({ lat, lng, onLocationChange }) {
   const mapRef = useRef(null);
   const markerRef = useRef(null);
 
+  const [searchQuery, setSearchQuery] = useState('');
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const searchTimeoutRef = useRef(null);
+
+  function handleSearchInput(e) {
+    const val = e.target.value;
+    setSearchQuery(val);
+    
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    
+    if (val.trim().length < 3) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    searchTimeoutRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(val)}&limit=5`);
+        const data = await res.json();
+        setSuggestions(data || []);
+        setShowSuggestions(true);
+      } catch (err) {
+        console.error("Autocomplete failed", err);
+      }
+    }, 400);
+  }
+
+  function handleSelectSuggestion(suggestion) {
+    setSearchQuery(suggestion.display_name);
+    setShowSuggestions(false);
+    
+    const newLat = parseFloat(suggestion.lat);
+    const newLng = parseFloat(suggestion.lon);
+    
+    onLocationChange(
+      Math.round(newLat * 10000) / 10000,
+      Math.round(newLng * 10000) / 10000
+    );
+    
+    if (mapRef.current && markerRef.current) {
+      mapRef.current.flyTo({ center: [newLng, newLat], zoom: 15, duration: 1500 });
+      markerRef.current.setLngLat([newLng, newLat]);
+    }
+  }
+
+  async function fetchLocationName(latitude, longitude) {
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
+      const data = await res.json();
+      if (data && data.display_name) {
+        setSearchQuery(data.display_name);
+      }
+    } catch (err) {
+      console.error("Reverse geocoding failed", err);
+    }
+  }
+
   useEffect(() => {
     if (mapRef.current || !containerRef.current) return;
 
@@ -143,19 +202,19 @@ function MapPicker({ lat, lng, onLocationChange }) {
 
     marker.on('dragend', () => {
       const pos = marker.getLngLat();
-      onLocationChange(
-        Math.round(pos.lat * 10000) / 10000,
-        Math.round(pos.lng * 10000) / 10000
-      );
+      const rLat = Math.round(pos.lat * 10000) / 10000;
+      const rLng = Math.round(pos.lng * 10000) / 10000;
+      onLocationChange(rLat, rLng);
+      fetchLocationName(rLat, rLng);
     });
 
     map.on('click', (e) => {
       const { lat: newLat, lng: newLng } = e.lngLat;
       marker.setLngLat([newLng, newLat]);
-      onLocationChange(
-        Math.round(newLat * 10000) / 10000,
-        Math.round(newLng * 10000) / 10000
-      );
+      const rLat = Math.round(newLat * 10000) / 10000;
+      const rLng = Math.round(newLng * 10000) / 10000;
+      onLocationChange(rLat, rLng);
+      fetchLocationName(rLat, rLng);
     });
 
     mapRef.current = map;
@@ -181,16 +240,55 @@ function MapPicker({ lat, lng, onLocationChange }) {
   }, [lat, lng]);
 
   return (
-    <div style={{ position: 'relative' }}>
-      <div
-        ref={containerRef}
-        style={{
-          width: '100%', height: 280,
-          borderRadius: 'var(--radius-md)',
-          border: '1px solid var(--color-border)',
-          overflow: 'hidden',
-        }}
-      />
+    <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: 12 }}>
+      
+      {/* Autocomplete Search Bar */}
+      <div style={{ position: 'relative' }}>
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={handleSearchInput}
+          onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+          placeholder="Search location (e.g., Connaught Place, New Delhi)..."
+          className="form-input"
+          style={{ width: '100%', marginBottom: 0 }}
+        />
+        
+        {/* Dropdown Suggestions */}
+        {showSuggestions && suggestions.length > 0 && (
+          <div style={{
+            position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
+            marginTop: 4, background: 'var(--color-bg-card-solid)', border: '1px solid var(--color-border)',
+            borderRadius: 'var(--radius-md)', overflow: 'hidden', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)'
+          }}>
+            {suggestions.map((s, idx) => (
+              <div
+                key={idx}
+                onClick={() => handleSelectSuggestion(s)}
+                style={{
+                  padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid var(--color-border-subtle)',
+                  fontSize: 12, color: 'var(--color-text-primary)', transition: 'background 0.2s'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--color-bg-hover)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+              >
+                📍 {s.display_name}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div style={{ position: 'relative' }}>
+        <div
+          ref={containerRef}
+          style={{
+            width: '100%', height: 280,
+            borderRadius: 'var(--radius-md)',
+            border: '1px solid var(--color-border)',
+            overflow: 'hidden',
+          }}
+        />
       {/* Instruction overlay */}
       <div style={{
         position: 'absolute', bottom: 10, left: '50%', transform: 'translateX(-50%)',
@@ -200,6 +298,7 @@ function MapPicker({ lat, lng, onLocationChange }) {
         pointerEvents: 'none', whiteSpace: 'nowrap',
       }}>
         Click to place • Drag pin to adjust
+      </div>
       </div>
     </div>
   );

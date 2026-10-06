@@ -57,13 +57,22 @@ export default function CustomerOrderTrack() {
       const bounds = new maplibregl.LngLatBounds();
       bounds.extend([order.customerLng, order.customerLat]);
 
+      // Distinct route colors for split shipments
+      const ROUTE_COLORS = ['#10b981', '#60a5fa', '#f59e0b', '#a78bfa', '#fb923c'];
+      const MARKER_COLORS = ['#3b82f6', '#8b5cf6', '#f59e0b', '#ec4899', '#14b8a6'];
+
       // Warehouse markers & lines
       shipments.forEach((sh, i) => {
         if (!sh.warehouseLat || !sh.warehouseLng) return;
         
-        new maplibregl.Marker({ color: '#3b82f6' })
+        const markerColor = MARKER_COLORS[i % MARKER_COLORS.length];
+        const routeColor = ROUTE_COLORS[i % ROUTE_COLORS.length];
+        const itemList = sh.items?.map(it => `${it.name} ×${it.qty}`).join(', ') || '';
+        const popupText = `${sh.warehouseName || 'Warehouse'}${itemList ? `\n${itemList}` : ''}`;
+
+        new maplibregl.Marker({ color: markerColor })
           .setLngLat([sh.warehouseLng, sh.warehouseLat])
-          .setPopup(new maplibregl.Popup({ offset: 25 }).setText(sh.warehouseName || 'Warehouse'))
+          .setPopup(new maplibregl.Popup({ offset: 25 }).setText(popupText))
           .addTo(map);
           
         bounds.extend([sh.warehouseLng, sh.warehouseLat]);
@@ -92,7 +101,7 @@ export default function CustomerOrderTrack() {
               'line-cap': 'round'
             },
             paint: {
-              'line-color': '#10b981',
+              'line-color': routeColor,
               'line-width': 3,
               'line-dasharray': [2, 4]
             }
@@ -218,8 +227,107 @@ export default function CustomerOrderTrack() {
             background: 'rgba(15,22,41,0.65)', border: '1px solid rgba(51,65,85,0.35)',
             borderRadius: 14, padding: 20, marginBottom: 20,
           }}>
-            <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 16, color: '#e2e8f0' }}>Shipment Tracking</h3>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              <h3 style={{ fontSize: 14, fontWeight: 700, color: '#e2e8f0', margin: 0 }}>Shipment Tracking</h3>
+              {data.shipments.length > 1 && (
+                <span style={{
+                  fontSize: 10, fontWeight: 600, color: '#60a5fa',
+                  background: 'rgba(59,130,246,0.12)', padding: '3px 10px', borderRadius: 6,
+                }}>
+                  {data.shipments.length} shipments
+                </span>
+              )}
+            </div>
             <div ref={mapContainerRef} style={{ width: '100%', height: 350, borderRadius: 10, overflow: 'hidden' }} />
+            {/* Route legend for split shipments */}
+            {data.shipments.length > 1 && (
+              <div style={{ display: 'flex', gap: 16, marginTop: 12, flexWrap: 'wrap' }}>
+                {data.shipments.map((sh, i) => {
+                  const colors = ['#10b981', '#60a5fa', '#f59e0b', '#a78bfa', '#fb923c'];
+                  return (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <div style={{ width: 16, height: 3, background: colors[i % colors.length], borderRadius: 2 }} />
+                      <span style={{ fontSize: 11, color: '#94a3b8' }}>{sh.warehouseName}</span>
+                    </div>
+                  );
+                })}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981' }} />
+                  <span style={{ fontSize: 11, color: '#94a3b8' }}>You</span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Split Shipment Breakdown */}
+        {data.shipments?.length > 1 && (
+          <div style={{
+            background: 'rgba(15,22,41,0.65)', border: '1px solid rgba(51,65,85,0.35)',
+            borderRadius: 14, padding: 22, marginBottom: 20,
+          }}>
+            <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 6, color: '#e2e8f0' }}>Split Shipment Details</h3>
+            <p style={{ fontSize: 12, color: '#64748b', margin: '0 0 16px' }}>
+              Your order will arrive in {data.shipments.length} shipments from different warehouses
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {data.shipments.map((sh, i) => {
+                const colors = ['#10b981', '#60a5fa', '#f59e0b', '#a78bfa', '#fb923c'];
+                return (
+                  <div key={sh.id || i} style={{
+                    background: 'rgba(15,22,41,0.5)', border: `1px solid ${colors[i % colors.length]}30`,
+                    borderRadius: 10, padding: '14px 16px',
+                    borderLeft: `3px solid ${colors[i % colors.length]}`,
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: '#e2e8f0' }}>
+                        📦 Shipment {i + 1}
+                      </span>
+                      <span style={{
+                        fontSize: 10, fontWeight: 600, color: colors[i % colors.length],
+                        background: `${colors[i % colors.length]}18`, padding: '3px 10px', borderRadius: 6,
+                      }}>
+                        🏭 {sh.warehouseName}
+                      </span>
+                    </div>
+                    {sh.items?.length > 0 ? (
+                      sh.items.map((item, j) => (
+                        <div key={j} style={{
+                          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                          padding: '4px 0', fontSize: 12,
+                        }}>
+                          <span style={{ color: '#e2e8f0' }}>{item.name} × {item.qty}</span>
+                          <span style={{ color: '#64748b' }}>{sh.distanceKm?.toFixed(1)}km</span>
+                        </div>
+                      ))
+                    ) : (
+                      <p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>
+                        {sh.distanceKm?.toFixed(1)}km from your location
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Single shipment message */}
+        {data.shipments?.length === 1 && (
+          <div style={{
+            background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.2)',
+            borderRadius: 14, padding: '14px 22px', marginBottom: 20,
+            display: 'flex', alignItems: 'center', gap: 10,
+          }}>
+            <span style={{ fontSize: 18 }}>🏭</span>
+            <div>
+              <p style={{ fontSize: 13, fontWeight: 600, color: '#34d399', margin: 0 }}>
+                Fulfilled from {data.shipments[0].warehouseName}
+              </p>
+              <p style={{ fontSize: 11, color: '#64748b', margin: '2px 0 0' }}>
+                {data.shipments[0].distanceKm?.toFixed(1)}km from your location
+              </p>
+            </div>
           </div>
         )}
 

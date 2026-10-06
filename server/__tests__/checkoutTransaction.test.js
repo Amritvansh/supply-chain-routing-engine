@@ -119,10 +119,31 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (dbAvailable) {
+    await pool.query(
+      `DELETE FROM shipment_items WHERE shipment_id IN (SELECT id FROM shipments WHERE warehouse_id = $1)`,
+      [TEST_WAREHOUSE_ID]
+    );
     await pool.query(`DELETE FROM shipments WHERE warehouse_id = $1`, [TEST_WAREHOUSE_ID]);
     await pool.query(
       `DELETE FROM order_items WHERE sku IN ($1, $2)`,
       [TEST_SKU, TEST_SKU_2]
+    );
+    await pool.query(
+      `DELETE FROM shipment_items WHERE shipment_id IN (
+        SELECT id FROM shipments WHERE order_id IN (
+          SELECT id FROM orders WHERE idempotency_key LIKE 'test-idem-%'
+        )
+      )`
+    );
+    await pool.query(
+      `DELETE FROM shipments WHERE order_id IN (
+        SELECT id FROM orders WHERE idempotency_key LIKE 'test-idem-%'
+      )`
+    );
+    await pool.query(
+      `DELETE FROM order_items WHERE order_id IN (
+        SELECT id FROM orders WHERE idempotency_key LIKE 'test-idem-%'
+      )`
     );
     await pool.query(
       `DELETE FROM orders WHERE idempotency_key LIKE 'test-idem-%'`
@@ -312,6 +333,15 @@ describe('Concurrency — Oversell Prevention', () => {
       const CONCURRENT = 20;
 
       // Clean up any orders from prior tests that used TEST_SKU
+      await pool.query(
+        `DELETE FROM shipment_items WHERE shipment_id IN (
+           SELECT sh.id FROM shipments sh
+           JOIN orders o ON o.id = sh.order_id
+           JOIN order_items oi ON oi.order_id = o.id
+           WHERE oi.sku = $1
+         )`,
+        [TEST_SKU]
+      );
       await pool.query(
         `DELETE FROM shipments WHERE order_id IN (
            SELECT o.id FROM orders o

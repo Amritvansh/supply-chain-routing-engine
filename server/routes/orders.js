@@ -285,6 +285,7 @@ router.post('/checkout',
         order: txnResult.order,
         items: txnResult.items,
         shipments: txnResult.shipments,
+        fulfillmentType: txnResult.fulfillmentType,
         costBreakdown: txnResult.costBreakdown,
         alternatives: txnResult.alternatives,
         packing: routingResult.packing,
@@ -433,7 +434,8 @@ router.get('/track/:id',
       // Fetch order
       const orderResult = await pool.query(
         `SELECT id, status, created_at, customer_name, customer_phone,
-                shipping_address, pincode, total_amount
+                shipping_address, pincode, total_amount, fulfillment_type,
+                customer_lat, customer_lng
          FROM orders WHERE id = $1`,
         [id]
       );
@@ -461,11 +463,23 @@ router.get('/track/:id',
 
       // Fetch shipments with warehouse locations
       const shipmentResult = await pool.query(
-        `SELECT sh.distance_km, sh.total_cost, sh.box_size, sh.created_at, w.lat AS warehouse_lat, w.lng AS warehouse_lng, w.name AS warehouse_name
+        `SELECT sh.id AS shipment_id, sh.distance_km, sh.total_cost, sh.box_size, sh.created_at, w.lat AS warehouse_lat, w.lng AS warehouse_lng, w.name AS warehouse_name
          FROM shipments sh
          JOIN warehouses w ON w.id = sh.warehouse_id
          WHERE sh.order_id = $1
          ORDER BY sh.created_at ASC`,
+        [id]
+      );
+
+      // Fetch shipment items for split shipment detail
+      const shipmentItemsResult = await pool.query(
+        `SELECT si.shipment_id, si.sku, si.qty, s.name AS sku_name
+         FROM shipment_items si
+         JOIN skus s ON s.sku = si.sku
+         WHERE si.shipment_id IN (
+           SELECT id FROM shipments WHERE order_id = $1
+         )
+         ORDER BY si.shipment_id, s.name`,
         [id]
       );
 
@@ -491,7 +505,7 @@ router.get('/track/:id',
 
       // Map order status and webhook events to timeline
       const completedSteps = new Set(['ORDER_PLACED']);
-      if (['ROUTED', 'SPLIT_ROUTED', 'FULFILLED'].includes(order.status)) {
+      if (['ROUTED', 'SPLIT_ROUTED', 'FULFILLED', 'MULTI_WAREHOUSE_SPLIT'].includes(order.status)) {
         completedSteps.add('INVENTORY_ALLOCATED');
       }
 
@@ -538,13 +552,27 @@ router.get('/track/:id',
         lineTotal: parseFloat(row.price) * row.qty,
       }));
 
-      const shipments = shipmentResult.rows.map(row => ({
-        warehouseLat: parseFloat(row.warehouse_lat),
-        warehouseLng: parseFloat(row.warehouse_lng),
-        warehouseName: row.warehouse_name,
-        distanceKm: parseFloat(row.distance_km),
-        totalCost: parseFloat(row.total_cost),
-      }));
+      const shipments = shipmentResult.rows.map(row => {
+        const shipItems = shipmentItemsResult.rows
+          .filter(si => si.shipment_id === row.shipment_id)
+          .map(si => ({
+            sku: si.sku,
+            name: si.sku_name,
+            qty: si.qty,
+          }));
+
+        return {
+          id: row.shipment_id,
+          warehouseLat: parseFloat(row.warehouse_lat),
+          warehouseLng: parseFloat(row.warehouse_lng),
+          warehouseName: row.warehouse_name,
+          distanceKm: parseFloat(row.distance_km),
+          totalCost: parseFloat(row.total_cost),
+          items: shipItems,
+        };
+      });
+
+      const isSplit = (order.fulfillment_type === 'SPLIT_SHIPMENT') || shipments.length > 1;
 
       res.status(200).json({
         order: {
@@ -555,9 +583,10 @@ router.get('/track/:id',
           customerPhone: order.customer_phone,
           shippingAddress: order.shipping_address,
           pincode: order.pincode,
-          customerLat: parseFloat(order.customer_lat),
-          customerLng: parseFloat(order.customer_lng),
+          customerLat: order.customer_lat ? parseFloat(order.customer_lat) : null,
+          customerLng: order.customer_lng ? parseFloat(order.customer_lng) : null,
           totalAmount: order.total_amount ? parseFloat(order.total_amount) : null,
+          fulfillmentType: isSplit ? 'SPLIT_SHIPMENT' : 'SINGLE_SHIPMENT',
         },
         items,
         shipments,

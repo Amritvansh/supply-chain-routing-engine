@@ -81,15 +81,21 @@ export default function CheckoutPage() {
 
     marker.on('dragend', () => {
       const pos = marker.getLngLat();
-      setLat(Math.round(pos.lat * 10000) / 10000);
-      setLng(Math.round(pos.lng * 10000) / 10000);
+      const rLat = Math.round(pos.lat * 10000) / 10000;
+      const rLng = Math.round(pos.lng * 10000) / 10000;
+      setLat(rLat);
+      setLng(rLng);
+      fetchLocationName(rLat, rLng);
     });
 
     map.on('click', (e) => {
       const { lat: newLat, lng: newLng } = e.lngLat;
       marker.setLngLat([newLng, newLat]);
-      setLat(Math.round(newLat * 10000) / 10000);
-      setLng(Math.round(newLng * 10000) / 10000);
+      const rLat = Math.round(newLat * 10000) / 10000;
+      const rLng = Math.round(newLng * 10000) / 10000;
+      setLat(rLat);
+      setLng(rLng);
+      fetchLocationName(rLat, rLng);
     });
 
     mapRef.current = map;
@@ -102,6 +108,18 @@ export default function CheckoutPage() {
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function fetchLocationName(latitude, longitude) {
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
+      const data = await res.json();
+      if (data && data.display_name) {
+        setSearchQuery(data.display_name);
+      }
+    } catch (err) {
+      console.error("Reverse geocoding failed", err);
+    }
+  }
 
   function handleSearchInput(e) {
     const val = e.target.value;

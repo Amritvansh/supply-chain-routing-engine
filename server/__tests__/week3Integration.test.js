@@ -88,8 +88,23 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (dbAvailable) {
-    // Clean up test data in correct FK order
-    await pool.query(`DELETE FROM shipments WHERE warehouse_id = $1`, [TEST_WAREHOUSE_ID]);
+    await pool.query(
+      `DELETE FROM shipment_items WHERE shipment_id IN (
+        SELECT id FROM shipments WHERE order_id IN (
+          SELECT id FROM orders WHERE idempotency_key LIKE 'w3-test-%' OR idempotency_key LIKE 'flash-test-%'
+        )
+      )`
+    );
+    await pool.query(
+      `DELETE FROM shipments WHERE order_id IN (
+        SELECT id FROM orders WHERE idempotency_key LIKE 'w3-test-%' OR idempotency_key LIKE 'flash-test-%'
+      )`
+    );
+    await pool.query(
+      `DELETE FROM order_items WHERE order_id IN (
+        SELECT id FROM orders WHERE idempotency_key LIKE 'w3-test-%' OR idempotency_key LIKE 'flash-test-%'
+      )`
+    );
     await pool.query(`DELETE FROM order_items WHERE sku = $1`, [TEST_SKU]);
     await pool.query(
       `DELETE FROM orders WHERE idempotency_key LIKE 'w3-test-%' OR idempotency_key LIKE 'flash-test-%'`
@@ -142,7 +157,7 @@ describe('POST /api/v1/orders/checkout — Validation', () => {
       .send({ customerLat: 28.6, customerLng: 77.2, items: [] });
 
     expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe('INVALID_REQUEST');
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
   });
 
   test('returns 400 when customerLat/Lng are missing', async () => {
@@ -153,7 +168,7 @@ describe('POST /api/v1/orders/checkout — Validation', () => {
       .send({ items: [{ sku: TEST_SKU, qty: 1 }] });
 
     expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe('INVALID_REQUEST');
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
   });
 });
 
@@ -344,7 +359,7 @@ describe('POST /api/v1/orders/flash-test', () => {
       .send({ sku: TEST_SKU, qty: 1, concurrency: 999 });
 
     expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe('CONCURRENCY_LIMIT');
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
   });
 
   test('returns 400 for unknown SKU', async () => {

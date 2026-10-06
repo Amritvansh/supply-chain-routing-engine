@@ -64,6 +64,68 @@ export default function OrderConfirmation() {
 
         {order && (
           <>
+            {/* Fulfillment type badge */}
+            {order.order?.fulfillmentType === 'SPLIT_SHIPMENT' && (
+              <div style={{
+                background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.25)',
+                borderRadius: 10, padding: '10px 16px', marginBottom: 20, textAlign: 'center',
+              }}>
+                <p style={{ fontSize: 13, fontWeight: 700, color: '#60a5fa', margin: 0 }}>
+                  📦 Your order will arrive in {order.shipments?.length || 2} shipments
+                </p>
+                <p style={{ fontSize: 11, color: '#94a3b8', margin: '4px 0 0' }}>
+                  Items are being shipped from different warehouses for faster delivery
+                </p>
+              </div>
+            )}
+
+            {/* Shipment breakdown for split orders */}
+            {order.shipments?.length > 1 && (
+              <div style={{ textAlign: 'left', marginBottom: 20 }}>
+                <p style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Shipment Details</p>
+                {order.shipments.map((sh, i) => (
+                  <div key={sh.id || i} style={{
+                    background: 'rgba(15,22,41,0.5)', border: '1px solid rgba(51,65,85,0.3)',
+                    borderRadius: 10, padding: '12px 16px', marginBottom: 8,
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: '#e2e8f0' }}>
+                        Shipment {i + 1}
+                      </span>
+                      <span style={{
+                        fontSize: 10, fontWeight: 600, color: '#60a5fa',
+                        background: 'rgba(59,130,246,0.12)', padding: '2px 8px', borderRadius: 4,
+                      }}>
+                        🏭 {sh.warehouseName}
+                      </span>
+                    </div>
+                    {sh.items?.length > 0 && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        {sh.items.map((item, j) => (
+                          <div key={j} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                            <span style={{ color: '#94a3b8' }}>{item.name} × {item.qty}</span>
+                            <span style={{ color: '#64748b', fontSize: 11 }}>{sh.distanceKm?.toFixed(1)}km away</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Single shipment fulfilled message */}
+            {order.shipments?.length === 1 && (
+              <div style={{
+                background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.2)',
+                borderRadius: 10, padding: '10px 16px', marginBottom: 20, textAlign: 'center',
+              }}>
+                <p style={{ fontSize: 12, fontWeight: 600, color: '#34d399', margin: 0 }}>
+                  🏭 Fulfilled from {order.shipments[0].warehouseName}
+                </p>
+              </div>
+            )}
+
             {/* Items summary */}
             {order.items?.length > 0 && (
               <div style={{ textAlign: 'left', marginBottom: 20 }}>

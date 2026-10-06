@@ -21,6 +21,7 @@
 const { calculateCost } = require('./costFunction');
 const { packItems } = require('./binPacking');
 const { validateOrderItems, validateWarehouses } = require('./inputValidation');
+const { evaluateMultiWarehouseFulfillment } = require('./splitFulfillment');
 
 /**
  * Select the optimal warehouse for a given order.
@@ -122,14 +123,39 @@ function selectOptimalWarehouse({ warehouses, orderItems }) {
     });
   }
 
-  // Step 3: No eligible warehouses
+  // Step 3: No eligible warehouses — try multi-warehouse split
   if (candidates.length === 0) {
+    // Before giving up, check if the order can be fulfilled across multiple warehouses
+    const splitResult = evaluateMultiWarehouseFulfillment({ warehouses, orderItems });
+
+    if (splitResult && splitResult.status === 'MULTI_WAREHOUSE_SPLIT') {
+      return {
+        status: 'MULTI_WAREHOUSE_SPLIT',
+        chosen: splitResult.shipmentGroups[0] ? {
+          warehouseId: splitResult.shipmentGroups[0].warehouseId,
+          name: splitResult.shipmentGroups[0].warehouseName,
+          distanceKm: splitResult.shipmentGroups[0].distanceKm,
+          boxSize: splitResult.shipmentGroups[0].boxSize,
+          costBreakdown: splitResult.shipmentGroups[0].costBreakdown,
+          totalCost: splitResult.shipmentGroups[0].totalCost,
+        } : null,
+        alternatives: [],
+        packing: packingResult,
+        shipmentGroups: splitResult.shipmentGroups,
+        shipmentCount: splitResult.shipmentCount,
+        splitPenalty: splitResult.splitPenalty,
+        fulfillmentType: 'SPLIT_SHIPMENT',
+        totalCost: splitResult.totalCost,
+        message: splitResult.message,
+      };
+    }
+
     return {
       status: 'NO_ELIGIBLE_WAREHOUSE',
       chosen: null,
       alternatives: ineligible,
       packing: packingResult,
-      message: 'No warehouse has sufficient inventory to fulfill this order.',
+      message: splitResult?.message || 'No warehouse has sufficient inventory to fulfill this order.',
     };
   }
 
@@ -405,4 +431,6 @@ module.exports = {
   routeGroupAgainstInventory,
   checkEligibility,
   getWorstDepletion,
+  // Re-export for convenience
+  evaluateMultiWarehouseFulfillment: require('./splitFulfillment').evaluateMultiWarehouseFulfillment,
 };

@@ -106,25 +106,59 @@ async function executeCheckout({
       });
     }
 
-    const chosen = routingDecision.chosen;
-    const warehouseId = chosen.warehouseId;
+    const isSplit = routingDecision.fulfillmentType === 'SPLIT_SHIPMENT';
+    const status = isSplit ? 'MULTI_WAREHOUSE_SPLIT' : 'ROUTED';
+    
+    // Determine the shipments to create
+    const shipmentsData = isSplit 
+      ? routingDecision.shipmentGroups
+      : [routingDecision.chosen];
+
+    // Build a flat list of all item deductions across all shipments
+    const inventoryDeductions = [];
+    if (isSplit) {
+      for (const group of shipmentsData) {
+        for (const item of group.items) {
+          inventoryDeductions.push({
+            warehouseId: group.warehouseId,
+            sku: item.sku,
+            qty: item.qty
+          });
+        }
+      }
+    } else {
+      for (const item of items) {
+        inventoryDeductions.push({
+          warehouseId: shipmentsData[0].warehouseId,
+          sku: item.sku,
+          qty: item.qty
+        });
+      }
+    }
 
     // ── Step 2: Atomic inventory deduction ─────────────────────
     // Lock rows first with SELECT FOR UPDATE to prevent concurrent
     // transactions from reading stale snapshots, then UPDATE.
-    for (const item of items) {
+    
+    // Sort deductions to prevent deadlocks when locking multiple rows
+    inventoryDeductions.sort((a, b) => {
+      if (a.warehouseId !== b.warehouseId) return a.warehouseId.localeCompare(b.warehouseId);
+      return a.sku.localeCompare(b.sku);
+    });
+
+    for (const deduction of inventoryDeductions) {
       // Row-level lock — blocks other transactions on the same row
       const lockResult = await client.query(
         `SELECT available_qty FROM inventories
          WHERE warehouse_id = $1 AND sku = $2
          FOR UPDATE`,
-        [warehouseId, item.sku]
+        [deduction.warehouseId, deduction.sku]
       );
 
-      if (lockResult.rows.length === 0 || lockResult.rows[0].available_qty < item.qty) {
+      if (lockResult.rows.length === 0 || lockResult.rows[0].available_qty < deduction.qty) {
         await client.query('ROLLBACK');
         const actualAvailable = lockResult.rows[0]?.available_qty ?? 0;
-        throw new InsufficientStockError(item.sku, item.qty, actualAvailable);
+        throw new InsufficientStockError(deduction.sku, deduction.qty, actualAvailable);
       }
 
       await client.query(
@@ -134,7 +168,7 @@ async function executeCheckout({
          WHERE warehouse_id = $2
            AND sku = $3
            AND available_qty >= $1`,
-        [item.qty, warehouseId, item.sku]
+        [deduction.qty, deduction.warehouseId, deduction.sku]
       );
     }
 
@@ -142,14 +176,15 @@ async function executeCheckout({
     const orderResult = await client.query(
       `INSERT INTO orders (
          customer_lat, customer_lng, status, idempotency_key,
-         user_id, customer_name, customer_phone, shipping_address, pincode, total_amount
+         user_id, customer_name, customer_phone, shipping_address, pincode, total_amount, fulfillment_type
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING id, customer_lat, customer_lng, status, idempotency_key, created_at,
-                 user_id, customer_name, customer_phone, shipping_address, pincode, total_amount`,
+                 user_id, customer_name, customer_phone, shipping_address, pincode, total_amount, fulfillment_type`,
       [
-        customerLat, customerLng, 'ROUTED', idempotencyKey,
+        customerLat, customerLng, status, idempotencyKey,
         userId, customerName, customerPhone, shippingAddress, pincode, totalAmount,
+        isSplit ? 'SPLIT_SHIPMENT' : 'SINGLE_SHIPMENT'
       ]
     );
     const order = orderResult.rows[0];
@@ -166,20 +201,39 @@ async function executeCheckout({
       insertedItems.push(itemResult.rows[0]);
     }
 
-    // ── Step 5: Insert shipment ────────────────────────────────
-    const shipmentResult = await client.query(
-      `INSERT INTO shipments (order_id, warehouse_id, box_size, total_cost, distance_km)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING id, order_id, warehouse_id, box_size, total_cost, distance_km, created_at`,
-      [
-        order.id,
-        warehouseId,
-        chosen.boxSize,
-        chosen.totalCost,
-        chosen.distanceKm,
-      ]
-    );
-    const shipment = shipmentResult.rows[0];
+    // ── Step 5: Insert shipments and shipment_items ────────────
+    const insertedShipments = [];
+    for (const shipData of shipmentsData) {
+      const shipmentResult = await client.query(
+        `INSERT INTO shipments (order_id, warehouse_id, box_size, total_cost, distance_km)
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING id, order_id, warehouse_id, box_size, total_cost, distance_km, created_at`,
+        [
+          order.id,
+          shipData.warehouseId,
+          shipData.boxSize,
+          shipData.totalCost,
+          shipData.distanceKm,
+        ]
+      );
+      const shipment = shipmentResult.rows[0];
+      
+      // Determine items for this shipment
+      const shipItems = isSplit ? shipData.items : items;
+      
+      for (const item of shipItems) {
+        await client.query(
+          `INSERT INTO shipment_items (shipment_id, sku, qty)
+           VALUES ($1, $2, $3)`,
+          [shipment.id, item.sku, item.qty]
+        );
+      }
+      
+      insertedShipments.push({
+        ...shipment,
+        items: shipItems
+      });
+    }
 
     // ── Step 6: Commit ─────────────────────────────────────────
     await client.query('COMMIT');
@@ -187,8 +241,9 @@ async function executeCheckout({
     return {
       order,
       items: insertedItems,
-      shipments: [shipment],
-      costBreakdown: chosen.costBreakdown,
+      shipments: insertedShipments,
+      fulfillmentType: isSplit ? 'SPLIT_SHIPMENT' : 'SINGLE_SHIPMENT',
+      costBreakdown: isSplit ? null : routingDecision.chosen.costBreakdown,
       alternatives: routingDecision.alternatives,
     };
   } catch (err) {

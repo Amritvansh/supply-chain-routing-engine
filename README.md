@@ -11,6 +11,14 @@ This project uses a **Hybrid Architecture** with two distinct paths:
 
 > **Critical design rule:** The deterministic checkout path must not depend on the asynchronous AI explanation layer. Gemini failure must never cause checkout failure.
 
+### Multi-Warehouse Split Shipments
+If an order contains multiple items that cannot be completely fulfilled by any single warehouse, the engine evaluates a split shipment.
+1. **Single-Warehouse Priority:** The engine always attempts to find a single warehouse first. Split logic only executes as a fallback when `NO_ELIGIBLE_WAREHOUSE` is encountered.
+2. **Inventory Division & Fallback:** The split engine searches outward from the customer's location. It iterates over warehouses nearest-first and sequentially claims available inventory until the order is completely fulfilled.
+3. **Packaging:** Bin-packing (3D FFD) runs independently for each shipment created by a split order.
+4. **Correctness & Idempotency:** The PostgreSQL `executeCheckout` transaction dynamically acquires `SELECT FOR UPDATE` locks on inventory rows across all involved warehouses, strictly ordering by `warehouse_id` to prevent deadlocks. Redis handles global order-level idempotency to prevent duplicate splits during network retries.
+5. **AI Explanation:** The Gemini context builder has been updated to detect `shipmentGroups` and tailor its prompt to explain *why* the order was split and *which* products came from *where*.
+
 ## Tech Stack
 
 | Layer | Technology |
