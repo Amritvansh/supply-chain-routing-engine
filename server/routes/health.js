@@ -48,6 +48,9 @@ async function checkPostgres() {
  * @returns {Promise<boolean>}
  */
 async function checkRedis() {
+  if (!process.env.REDIS_URL || process.env.REDIS_URL.trim() === '') {
+    return true; // Using in-memory ioredis-mock in local dev
+  }
   let client;
   try {
     client = new Redis(env.REDIS_URL, {

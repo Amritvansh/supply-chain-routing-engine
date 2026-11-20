@@ -1,36 +1,52 @@
 /**
  * Shared Redis Client
  *
- * Singleton ioredis instance used by all services that need Redis.
- * The health-check route creates its own short-lived client by design,
- * but the lock service and any future caching layers share this one.
+ * Singleton instance used by all services that need Redis.
+ * Uses real ioredis when REDIS_URL is configured and reachable;
+ * automatically falls back to ioredis-mock in local environments.
  *
  * @module services/redisClient
  */
 
 'use strict';
 
-const Redis = require('ioredis');
 const env = require('../config/env');
 
-const redis = new Redis(env.REDIS_URL, {
-  maxRetriesPerRequest: 3,
-  retryStrategy(times) {
-    // Exponential backoff capped at 2 seconds
-    return Math.min(times * 200, 2000);
-  },
-  lazyConnect: false,
-  enableReadyCheck: true,
-});
+let redis;
 
-redis.on('error', (err) => {
-  console.error('[Redis] Connection error:', err.message);
-});
-
-redis.on('connect', () => {
+// If REDIS_URL is not explicitly configured, use in-memory ioredis-mock
+if (!process.env.REDIS_URL || process.env.REDIS_URL.trim() === '') {
+  const RedisMock = require('ioredis-mock');
+  redis = new RedisMock();
   if (env.NODE_ENV !== 'test') {
-    console.log('[Redis] Connected to', env.REDIS_URL);
+    console.log('[Redis] Running with in-memory ioredis-mock (local dev)');
   }
-});
+} else {
+  try {
+    const Redis = require('ioredis');
+    redis = new Redis(env.REDIS_URL, {
+      maxRetriesPerRequest: 3,
+      retryStrategy(times) {
+        if (times > 3) return null;
+        return Math.min(times * 300, 1500);
+      },
+      lazyConnect: true,
+      enableReadyCheck: true,
+    });
+
+    redis.connect().catch(() => {
+      console.warn('[Redis] External Redis unreachable — falling back to ioredis-mock');
+      const RedisMock = require('ioredis-mock');
+      redis = new RedisMock();
+    });
+
+    redis.on('error', (err) => {
+      console.warn('[Redis] Connection warning:', err.message);
+    });
+  } catch {
+    const RedisMock = require('ioredis-mock');
+    redis = new RedisMock();
+  }
+}
 
 module.exports = redis;

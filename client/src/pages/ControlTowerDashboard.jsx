@@ -76,6 +76,15 @@ function RouteIcon() {
   );
 }
 
+function AtRiskIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="12 6 12 12 16 14" />
+    </svg>
+  );
+}
+
 // ─── Sub-components ─────────────────────────────────────────
 
 function KpiCard({ icon, label, value, accentColor, onClick, isActive, loading }) {
@@ -271,6 +280,13 @@ function SelectedOrderPanel({ route, onClose }) {
                   📦 {s.boxSize}
                 </span>
               )}
+              {s.delayRisk && (
+                <span className={`badge ${
+                  s.delayRisk === 'HIGH' ? 'badge--danger' : s.delayRisk === 'MEDIUM' ? 'badge--warning' : 'badge--success'
+                } ${!s.boxSize ? 'ml-auto' : ''}`} style={{ fontSize: '10px', padding: '1px 5px' }}>
+                  {s.delayRisk}
+                </span>
+              )}
             </div>
             <div className="flex justify-between text-[10px] text-[var(--color-text-muted)]">
               <span>{parseFloat(s.distanceKm).toFixed(1)} km</span>
@@ -299,8 +315,8 @@ function SkeletonMap() {
 
 function SkeletonStats() {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-      {[1, 2, 3, 4].map((i) => (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      {[1, 2, 3, 4, 5].map((i) => (
         <div
           key={i}
           className="kpi-card animate-shimmer"
@@ -803,6 +819,7 @@ export default function ControlTowerDashboard() {
   const lowStockCount = stats?.warehouseHealth?.lowStock ?? warehouses.filter(isLowStock).length;
   const fulfilledOrders = stats?.ordersByStatus?.fulfilled ?? 0;
   const activeRoutes = routes.length;
+  const atRiskCount = stats?.delayRiskSummary?.atRiskCount ?? 0;
 
   // ─── Render ─────────────────────────────────────────────
   return (
@@ -821,7 +838,7 @@ export default function ControlTowerDashboard() {
       {loading ? (
         <SkeletonStats />
       ) : !error && warehouses.length > 0 ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <KpiCard
             icon={<WarehouseIcon />}
             label="Active Warehouses"
@@ -850,6 +867,13 @@ export default function ControlTowerDashboard() {
             label="Fulfilled"
             value={fulfilledOrders}
             accentColor="var(--color-success)"
+            loading={statsLoading}
+          />
+          <KpiCard
+            icon={<AtRiskIcon />}
+            label="At-Risk Shipments"
+            value={atRiskCount}
+            accentColor={atRiskCount > 0 ? '#ef4444' : 'var(--color-success)'}
             loading={statsLoading}
           />
         </div>
@@ -939,6 +963,14 @@ export default function ControlTowerDashboard() {
                 {routes.slice(0, 12).map((route) => {
                   const isSelected = selectedRoute?.orderId === route.orderId;
                   const isSplit = (route.shipments || []).length > 1;
+                  const highestRisk = (route.shipments || []).reduce((acc, s) => {
+                    if (s.delayRisk === 'HIGH' || acc === 'HIGH') return 'HIGH';
+                    if (s.delayRisk === 'MEDIUM' || acc === 'MEDIUM') return 'MEDIUM';
+                    if (s.delayRisk === 'LOW') return acc || 'LOW';
+                    return acc;
+                  }, null);
+                  const riskDotColor = highestRisk === 'HIGH' ? '#ef4444' : highestRisk === 'MEDIUM' ? '#f59e0b' : highestRisk === 'LOW' ? '#10b981' : null;
+
                   return (
                     <button
                       key={route.orderId}
@@ -962,6 +994,15 @@ export default function ControlTowerDashboard() {
                         <span className="text-xs text-[var(--color-text-primary)] font-medium truncate">
                           {(route.shipments || []).map((s) => s.warehouseName).join(' → ')}
                         </span>
+                        {riskDotColor && (
+                          <span
+                            title={`Delay Risk: ${highestRisk}`}
+                            style={{
+                              width: 7, height: 7, borderRadius: '50%',
+                              background: riskDotColor, flexShrink: 0, marginLeft: 'auto'
+                            }}
+                          />
+                        )}
                       </div>
                       <div className="flex items-center justify-between mt-1">
                         <span className="text-[10px] text-[var(--color-text-muted)]">

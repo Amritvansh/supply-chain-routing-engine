@@ -14,6 +14,7 @@
 
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { authLogin, authRegister, authGetMe } from '../lib/apiClient';
+import storage from '../lib/storage';
 
 const AuthContext = createContext(null);
 
@@ -23,7 +24,7 @@ export function AuthProvider({ children }) {
 
   // ── Verify existing token on mount ───────────────────────
   useEffect(() => {
-    const token = localStorage.getItem('auth_token');
+    const token = storage.getItem('auth_token');
     if (!token) {
       setLoading(false);
       return;
@@ -35,7 +36,7 @@ export function AuthProvider({ children }) {
       })
       .catch(() => {
         // Token invalid or expired — clean up silently
-        localStorage.removeItem('auth_token');
+        storage.removeItem('auth_token');
         setUser(null);
       })
       .finally(() => {
@@ -46,7 +47,7 @@ export function AuthProvider({ children }) {
   // ── Login ────────────────────────────────────────────────
   const login = useCallback(async (email, password) => {
     const data = await authLogin({ email, password });
-    localStorage.setItem('auth_token', data.token);
+    storage.setItem('auth_token', data.token);
     setUser(data.user);
     return data.user;
   }, []);
@@ -54,14 +55,14 @@ export function AuthProvider({ children }) {
   // ── Register ─────────────────────────────────────────────
   const register = useCallback(async (name, email, password, role = 'customer') => {
     const data = await authRegister({ name, email, password, role });
-    localStorage.setItem('auth_token', data.token);
+    storage.setItem('auth_token', data.token);
     setUser(data.user);
     return data.user;
   }, []);
 
   // ── Logout ───────────────────────────────────────────────
   const logout = useCallback(() => {
-    localStorage.removeItem('auth_token');
+    storage.removeItem('auth_token');
     setUser(null);
   }, []);
 

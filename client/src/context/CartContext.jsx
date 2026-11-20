@@ -6,13 +6,14 @@
  *          clearCart, cartCount, cartSubtotal
  */
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import storage from '../lib/storage';
 
 const CartContext = createContext(null);
 const STORAGE_KEY = 'sc_cart';
 
 function loadCart() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = storage.getItem(STORAGE_KEY);
     return raw ? JSON.parse(raw) : [];
   } catch { return []; }
 }
@@ -22,7 +23,11 @@ export function CartProvider({ children }) {
 
   // Persist on every change
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(cartItems));
+    try {
+      storage.setItem(STORAGE_KEY, JSON.stringify(cartItems));
+    } catch {
+      // Ignore storage persistence errors
+    }
   }, [cartItems]);
 
   const addToCart = useCallback((product, qty = 1) => {

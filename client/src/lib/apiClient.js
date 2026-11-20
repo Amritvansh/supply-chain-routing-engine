@@ -11,11 +11,13 @@
  *   checkout rendering on an explanation result.
  */
 
+import storage from './storage';
+
 const BASE_URL = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/v1`;
 
 /**
  * Generic fetch wrapper with consistent error handling.
- * Automatically attaches JWT from localStorage if available.
+ * Automatically attaches JWT from storage if available.
  * @param {string} endpoint - path after /api/v1
  * @param {RequestInit} options - fetch options
  * @returns {Promise<any>} parsed JSON body
@@ -24,7 +26,7 @@ async function request(endpoint, options = {}) {
   const url = `${BASE_URL}${endpoint}`;
 
   // Auto-attach JWT token if present
-  const token = localStorage.getItem('auth_token');
+  const token = storage.getItem('auth_token');
 
   const config = {
     ...options,

@@ -79,6 +79,8 @@ const navItems = [
   },
 ];
 
+import storage from '../lib/storage';
+
 export default function Layout() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   // Desktop sidebar collapse (separate from mobile drawer)
@@ -96,8 +98,8 @@ export default function Layout() {
   // ── Theme toggle (Day / Night) ──────────────────────────────
   const [isDark, setIsDark] = useState(() => {
     // Default: dark mode (existing site appearance). Only switch to light if
-    // the user previously saved 'light' in localStorage.
-    const saved = localStorage.getItem('theme');
+    // the user previously saved 'light' in storage.
+    const saved = storage.getItem('theme');
     return saved !== 'light';
   });
 
@@ -107,7 +109,7 @@ export default function Layout() {
     } else {
       document.documentElement.classList.add('light');
     }
-    localStorage.setItem('theme', isDark ? 'dark' : 'light');
+    storage.setItem('theme', isDark ? 'dark' : 'light');
   }, [isDark]);
 
   // Close drawer on route change

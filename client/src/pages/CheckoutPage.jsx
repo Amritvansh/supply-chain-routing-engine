@@ -362,12 +362,56 @@ export default function CheckoutPage() {
                   {quoteLoading ? '...' : quote?.deliveryFee != null ? formatINR(quote.deliveryFee) : '—'}
                 </span>
               </div>
-              {quote?.estimatedDays && (
+              {quote?.mlPrediction ? (
+                <div style={{
+                  background: 'rgba(16,185,129,0.06)',
+                  border: '1px solid rgba(16,185,129,0.2)',
+                  borderRadius: 8,
+                  padding: '10px 12px',
+                  marginTop: 4,
+                  marginBottom: 4,
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                    <span style={{ color: '#94a3b8', fontSize: 12 }}>Estimated Delivery</span>
+                    <span style={{
+                      fontSize: 10,
+                      fontWeight: 700,
+                      padding: '2px 8px',
+                      borderRadius: 6,
+                      background: (quote.mlPrediction.onTimeConfidence ?? 90) >= 80
+                        ? 'rgba(16,185,129,0.15)'
+                        : (quote.mlPrediction.onTimeConfidence ?? 90) >= 60
+                          ? 'rgba(245,158,11,0.15)'
+                          : 'rgba(239,68,68,0.15)',
+                      color: (quote.mlPrediction.onTimeConfidence ?? 90) >= 80
+                        ? '#10b981'
+                        : (quote.mlPrediction.onTimeConfidence ?? 90) >= 60
+                          ? '#f59e0b'
+                          : '#ef4444',
+                    }}>
+                      {quote.mlPrediction.onTimeConfidence ?? 90}% on-time
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#10b981' }}>
+                    Arriving {quote.mlPrediction.predictedDeliveryFormatted || `${quote.estimatedDays} days`}
+                  </div>
+                  {quote.mlPrediction.delayRisk === 'HIGH' && (
+                    <div style={{ fontSize: 11, color: '#f87171', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <span>⚠️</span> Possible transit delays expected on this route
+                    </div>
+                  )}
+                  {quote.mlPrediction.featureImportance && quote.mlPrediction.featureImportance.length > 0 && (
+                    <div style={{ fontSize: 10, color: '#64748b', marginTop: 4 }}>
+                      Factors: {quote.mlPrediction.featureImportance.join(' • ')}
+                    </div>
+                  )}
+                </div>
+              ) : quote?.estimatedDays ? (
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: '#94a3b8' }}>Estimated Delivery</span>
                   <span style={{ fontWeight: 600, color: '#10b981' }}>{quote.estimatedDays} day{quote.estimatedDays > 1 ? 's' : ''}</span>
                 </div>
-              )}
+              ) : null}
               <div style={{ height: 1, background: 'rgba(51,65,85,0.3)' }} />
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ fontWeight: 700, color: '#e2e8f0', fontSize: 15 }}>Total</span>

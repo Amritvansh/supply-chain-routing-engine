@@ -35,6 +35,7 @@ const { getExplanation, insertExplanation } = require('../db/aiExplanations');
 const geminiClient = require('../services/geminiClient');
 const { getDistance } = require('../services/googleMaps');
 const { selectOptimalWarehouse } = require('../algorithms/routingEngine');
+const { predictDelivery } = require('../services/etaPredictor');
 const { acquireLock, releaseLock } = require('../services/redisLock');
 const { executeCheckout } = require('../db/transactions/checkoutTransaction');
 const { recordLockAttempt } = require('../db/lockAudit');
@@ -500,7 +501,7 @@ router.get('/track/:id',
 
       // Fetch items with product names and prices
       const itemsResult = await pool.query(
-        `SELECT oi.sku, s.name, s.price, s.image_url, oi.qty
+        `SELECT oi.sku, s.name, s.price, s.image_url, s.weight_kg, oi.qty
          FROM order_items oi
          JOIN skus s ON s.sku = oi.sku
          WHERE oi.order_id = $1
@@ -581,14 +582,10 @@ router.get('/track/:id',
         completed: completedSteps.has(step),
       }));
 
-      // Calculate estimated delivery
-      let estimatedDays = null;
-      let deliveryFee = null;
-      if (shipmentResult.rows.length > 0) {
-        const distanceKm = parseFloat(shipmentResult.rows[0].distance_km);
-        estimatedDays = distanceKm < 100 ? 1 : distanceKm < 500 ? 2 : distanceKm < 1000 ? 3 : 5;
-        deliveryFee = parseFloat(shipmentResult.rows[0].total_cost);
-      }
+      const weightMap = new Map();
+      itemsResult.rows.forEach(r => {
+        weightMap.set(r.sku, parseFloat(r.weight_kg) || 1.0);
+      });
 
       const items = itemsResult.rows.map(row => ({
         sku: row.sku,
@@ -598,6 +595,8 @@ router.get('/track/:id',
         qty: row.qty,
         lineTotal: parseFloat(row.price) * row.qty,
       }));
+
+      const isSplit = (order.fulfillment_type === 'SPLIT_SHIPMENT') || shipmentResult.rows.length > 1;
 
       const { getRoadRoute } = require('../services/osrm');
       const shipments = await Promise.all(
@@ -616,6 +615,7 @@ router.get('/track/:id',
           const custLng = order.customer_lng ? parseFloat(order.customer_lng) : null;
 
           let coordinates = null;
+          let osrmDurationMins = null;
           if (whLat && whLng && custLat && custLng) {
             try {
               const road = await getRoadRoute(
@@ -623,6 +623,7 @@ router.get('/track/:id',
                 { lat: custLat, lng: custLng }
               );
               coordinates = road.coordinates;
+              osrmDurationMins = road.durationMins;
             } catch {
               coordinates = [
                 [whLng, whLat],
@@ -631,6 +632,16 @@ router.get('/track/:id',
             }
           }
 
+          const shipWeight = shipItems.reduce((sum, it) => sum + ((weightMap.get(it.sku) || 1) * it.qty), 0);
+          const shipmentPrediction = predictDelivery({
+            distanceKm: parseFloat(row.distance_km),
+            durationMins: osrmDurationMins,
+            boxSize: row.box_size || 'MEDIUM',
+            totalWeightKg: shipWeight,
+            isSplitShipment: isSplit,
+            timestamp: order.created_at,
+          });
+
           return {
             id: row.shipment_id,
             warehouseLat: whLat,
@@ -638,13 +649,32 @@ router.get('/track/:id',
             warehouseName: row.warehouse_name,
             distanceKm: parseFloat(row.distance_km),
             totalCost: parseFloat(row.total_cost),
+            boxSize: row.box_size,
             items: shipItems,
             coordinates,
+            delayRisk: shipmentPrediction.delayRisk,
+            mlPrediction: shipmentPrediction,
           };
         })
       );
 
-      const isSplit = (order.fulfillment_type === 'SPLIT_SHIPMENT') || shipments.length > 1;
+      // Top-level ML prediction and estimatedDays
+      let topPrediction = null;
+      let estimatedDays = null;
+      let deliveryFee = null;
+
+      if (shipments.length > 0) {
+        deliveryFee = shipments.reduce((sum, s) => sum + s.totalCost, 0);
+        topPrediction = shipments.reduce((slowest, s) => {
+          return (!slowest || (s.mlPrediction?.predictedTransitHours > slowest.predictedTransitHours))
+            ? s.mlPrediction
+            : slowest;
+        }, null);
+
+        estimatedDays = topPrediction?.predictedTransitHours
+          ? Math.max(1, Math.ceil(topPrediction.predictedTransitHours / 24))
+          : (shipments[0].distanceKm < 100 ? 1 : shipments[0].distanceKm < 500 ? 2 : shipments[0].distanceKm < 1000 ? 3 : 5);
+      }
 
       res.status(200).json({
         order: {
@@ -664,6 +694,7 @@ router.get('/track/:id',
         shipments,
         deliveryFee,
         estimatedDays,
+        mlPrediction: topPrediction,
         timeline,
       });
     } catch (err) {
@@ -1124,11 +1155,25 @@ router.post('/quote',
       subtotal = Math.round(subtotal * 100) / 100;
       const total = Math.round((subtotal + deliveryFee) * 100) / 100;
 
-      // Estimate delivery days based on distance
+      // Estimate delivery days and ML prediction
       const distanceKm = routingResult.chosen?.distanceKm || (routingResult.shipmentGroups?.[0]?.distanceKm ?? 100);
-      const estimatedDays = distanceKm < 100 ? 1 : distanceKm < 500 ? 2 : distanceKm < 1000 ? 3 : 5;
+      const isSplitOrder = routingResult.status === 'SPLIT_ROUTED' ||
+        routingResult.status === 'MULTI_WAREHOUSE_SPLIT' ||
+        Boolean(routingResult.shipmentGroups && routingResult.shipmentGroups.length > 1);
+      const boxSizeChoice = routingResult.chosen?.boxSize || routingResult.shipmentGroups?.[0]?.boxSize || 'MEDIUM';
+      const totalWeightKg = orderItems.reduce((sum, item) => sum + (item.weight_kg * item.qty), 0);
 
-      log.info({ deliveryFee, subtotal, total, distanceKm }, 'Quote: calculated');
+      const mlPrediction = predictDelivery({
+        distanceKm,
+        totalWeightKg,
+        boxSize: boxSizeChoice,
+        isSplitShipment: isSplitOrder,
+        timestamp: new Date(),
+      });
+
+      const estimatedDays = Math.max(1, Math.ceil(mlPrediction.predictedTransitHours / 24));
+
+      log.info({ deliveryFee, subtotal, total, distanceKm, delayRisk: mlPrediction.delayRisk }, 'Quote: calculated');
 
       res.status(200).json({
         deliveryFee,
@@ -1137,6 +1182,7 @@ router.post('/quote',
         estimatedDays,
         items: itemBreakdown,
         boxSize: routingResult.chosen?.boxSize || routingResult.shipmentGroups?.[0]?.boxSize || 'SPLIT',
+        mlPrediction,
       });
     } catch (err) {
       next(err);

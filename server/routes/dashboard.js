@@ -20,6 +20,7 @@ const { Router } = require('express');
 const pool = require('../db/pool');
 const logger = require('../services/logger');
 const { validateMapDataQuery } = require('../middleware/validators');
+const { predictDelivery } = require('../services/etaPredictor');
 
 const router = Router();
 
@@ -117,6 +118,12 @@ router.get('/map-data', validateMapDataQuery, async (req, res, next) => {
         });
       }
 
+      const prediction = predictDelivery({
+        distanceKm: parseFloat(row.distance_km),
+        boxSize: row.box_size,
+        timestamp: row.created_at,
+      });
+
       routeMap.get(row.order_id).shipments.push({
         shipmentId: row.shipment_id,
         warehouseId: row.warehouse_id,
@@ -126,6 +133,8 @@ router.get('/map-data', validateMapDataQuery, async (req, res, next) => {
         distanceKm: parseFloat(row.distance_km),
         boxSize: row.box_size,
         totalCost: parseFloat(row.total_cost),
+        delayRisk: prediction.delayRisk,
+        mlPrediction: prediction,
       });
     }
 
@@ -185,6 +194,7 @@ router.get('/stats', async (req, res, next) => {
       deliveryResult,
       lifecycleResult,
       warehouseHealthResult,
+      recentShipmentsResult,
     ] = await Promise.all([
       // ─── Order counts by status + total revenue ─────────
       pool.query(`
@@ -240,6 +250,14 @@ router.get('/stats', async (req, res, next) => {
           )::int AS low_stock
         FROM warehouses w
       `, [LOW_STOCK_THRESHOLD]),
+
+      // ─── Recent shipments for delay risk categorization ─
+      pool.query(`
+        SELECT distance_km, box_size, created_at
+        FROM shipments
+        ORDER BY created_at DESC
+        LIMIT 100
+      `),
     ]);
 
     const orderStats = orderStatsResult.rows[0];
@@ -247,9 +265,27 @@ router.get('/stats', async (req, res, next) => {
     const lifecycle = lifecycleResult.rows[0];
     const warehouseHealth = warehouseHealthResult.rows[0];
 
+    // Compute delay risk distribution across recent shipments
+    let lowRiskCount = 0;
+    let medRiskCount = 0;
+    let highRiskCount = 0;
+
+    for (const row of (recentShipmentsResult?.rows || [])) {
+      const pred = predictDelivery({
+        distanceKm: parseFloat(row.distance_km),
+        boxSize: row.box_size,
+        timestamp: row.created_at,
+      });
+      if (pred.delayRisk === 'LOW') lowRiskCount++;
+      else if (pred.delayRisk === 'HIGH') highRiskCount++;
+      else medRiskCount++;
+    }
+    const atRiskCount = medRiskCount + highRiskCount;
+
     log.info({
       totalOrders: orderStats.total_orders,
       totalShipments: delivery.total_shipments,
+      atRiskShipments: atRiskCount,
     }, 'Dashboard stats: aggregated');
 
     res.status(200).json({
@@ -279,6 +315,12 @@ router.get('/stats', async (req, res, next) => {
         active: warehouseHealth.active,
         lowStock: warehouseHealth.low_stock,
         healthy: warehouseHealth.active - warehouseHealth.low_stock,
+      },
+      delayRiskSummary: {
+        low: lowRiskCount,
+        medium: medRiskCount,
+        high: highRiskCount,
+        atRiskCount,
       },
     });
   } catch (err) {

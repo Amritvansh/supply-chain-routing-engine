@@ -213,13 +213,41 @@ export default function CustomerOrderTrack() {
             <h1 style={{ fontSize: 22, fontWeight: 800, margin: 0, letterSpacing: '-0.02em' }}>Order Tracking</h1>
             <p style={{ fontSize: 12, color: '#64748b', margin: '4px 0 0', fontFamily: 'monospace' }}>#{id.slice(0, 8)}...{id.slice(-4)}</p>
           </div>
-          {estimatedDays && (
+          {(data?.mlPrediction || estimatedDays) && (
             <div style={{
               background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.3)',
-              borderRadius: 10, padding: '8px 16px', textAlign: 'center',
+              borderRadius: 10, padding: '8px 16px', textAlign: 'right', minWidth: 160,
             }}>
-              <p style={{ fontSize: 10, color: '#64748b', margin: 0, fontWeight: 600, textTransform: 'uppercase' }}>Est. Delivery</p>
-              <p style={{ fontSize: 18, fontWeight: 800, color: '#10b981', margin: '2px 0 0' }}>{estimatedDays} day{estimatedDays > 1 ? 's' : ''}</p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                <p style={{ fontSize: 10, color: '#64748b', margin: 0, fontWeight: 600, textTransform: 'uppercase' }}>Est. Delivery</p>
+                {data?.mlPrediction && (
+                  <span style={{
+                    fontSize: 9,
+                    fontWeight: 700,
+                    padding: '2px 6px',
+                    borderRadius: 4,
+                    background: (data.mlPrediction.onTimeConfidence ?? 90) >= 80 ? 'rgba(16,185,129,0.2)' : 'rgba(245,158,11,0.2)',
+                    color: (data.mlPrediction.onTimeConfidence ?? 90) >= 80 ? '#10b981' : '#f59e0b',
+                  }}>
+                    {data.mlPrediction.onTimeConfidence ?? 90}% confidence
+                  </span>
+                )}
+                {data?.mlPrediction?.delayRisk && data.mlPrediction.delayRisk !== 'LOW' && (
+                  <span style={{
+                    fontSize: 9,
+                    fontWeight: 700,
+                    padding: '2px 5px',
+                    borderRadius: 4,
+                    background: data.mlPrediction.delayRisk === 'HIGH' ? 'rgba(239,68,68,0.2)' : 'rgba(245,158,11,0.2)',
+                    color: data.mlPrediction.delayRisk === 'HIGH' ? '#ef4444' : '#f59e0b',
+                  }}>
+                    {data.mlPrediction.delayRisk} RISK
+                  </span>
+                )}
+              </div>
+              <p style={{ fontSize: 16, fontWeight: 800, color: '#10b981', margin: '2px 0 0' }}>
+                {data?.mlPrediction?.predictedDeliveryFormatted || `${estimatedDays} day${estimatedDays > 1 ? 's' : ''}`}
+              </p>
             </div>
           )}
         </div>
@@ -331,12 +359,24 @@ export default function CustomerOrderTrack() {
                       <span style={{ fontSize: 13, fontWeight: 700, color: '#e2e8f0' }}>
                         📦 Shipment {i + 1}
                       </span>
-                      <span style={{
-                        fontSize: 10, fontWeight: 600, color: colors[i % colors.length],
-                        background: `${colors[i % colors.length]}18`, padding: '3px 10px', borderRadius: 6,
-                      }}>
-                        🏭 {sh.warehouseName}
-                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        {sh.mlPrediction && (
+                          <span style={{
+                            fontSize: 10, fontWeight: 700,
+                            color: sh.mlPrediction.delayRisk === 'HIGH' ? '#ef4444' : sh.mlPrediction.delayRisk === 'MEDIUM' ? '#f59e0b' : '#10b981',
+                            background: sh.mlPrediction.delayRisk === 'HIGH' ? 'rgba(239,68,68,0.15)' : sh.mlPrediction.delayRisk === 'MEDIUM' ? 'rgba(245,158,11,0.15)' : 'rgba(16,185,129,0.15)',
+                            padding: '2px 8px', borderRadius: 6,
+                          }}>
+                            {sh.mlPrediction.delayRisk} RISK • {sh.mlPrediction.onTimeConfidence ?? 90}% on-time
+                          </span>
+                        )}
+                        <span style={{
+                          fontSize: 10, fontWeight: 600, color: colors[i % colors.length],
+                          background: `${colors[i % colors.length]}18`, padding: '3px 10px', borderRadius: 6,
+                        }}>
+                          🏭 {sh.warehouseName}
+                        </span>
+                      </div>
                     </div>
                     {sh.items?.length > 0 ? (
                       sh.items.map((item, j) => (
