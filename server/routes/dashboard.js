@@ -129,6 +129,30 @@ router.get('/map-data', validateMapDataQuery, async (req, res, next) => {
       });
     }
 
+    // Enrich shipments with road coordinates
+    const { getRoadRoute } = require('../services/osrm');
+    await Promise.all(
+      Array.from(routeMap.values()).flatMap((r) =>
+        r.shipments.map(async (sh) => {
+          if (sh.warehouseLat && sh.warehouseLng && r.customer.lat && r.customer.lng) {
+            try {
+              const road = await getRoadRoute(
+                { lat: sh.warehouseLat, lng: sh.warehouseLng },
+                { lat: r.customer.lat, lng: r.customer.lng }
+              );
+              sh.coordinates = road.coordinates;
+              sh.roadSource = road.source;
+            } catch {
+              sh.coordinates = [
+                [sh.warehouseLng, sh.warehouseLat],
+                [r.customer.lng, r.customer.lat],
+              ];
+            }
+          }
+        })
+      )
+    );
+
     const routes = Array.from(routeMap.values());
 
     res.status(200).json({ warehouses, routes });
@@ -256,6 +280,61 @@ router.get('/stats', async (req, res, next) => {
         lowStock: warehouseHealth.low_stock,
         healthy: warehouseHealth.active - warehouseHealth.low_stock,
       },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /api/v1/dashboard/road-geometry
+ *
+ * Returns the OSRM road geometry (array of [lng, lat] coordinates)
+ * for a given origin → destination pair. Used by the frontend to
+ * draw actual road-following route lines on the MapLibre GL map.
+ *
+ * Query params:
+ *   originLat, originLng   — warehouse coordinates
+ *   destLat, destLng       — customer coordinates
+ *
+ * Response:
+ *   { coordinates: [[lng, lat], ...], distanceKm, durationMins, source }
+ */
+router.get('/road-geometry', async (req, res, next) => {
+  try {
+    const { originLat, originLng, destLat, destLng } = req.query;
+
+    // Validate required params
+    if (!originLat || !originLng || !destLat || !destLng) {
+      return res.status(400).json({
+        error: {
+          code: 'MISSING_PARAMS',
+          message: 'Required query params: originLat, originLng, destLat, destLng',
+        },
+      });
+    }
+
+    const origin = { lat: parseFloat(originLat), lng: parseFloat(originLng) };
+    const destination = { lat: parseFloat(destLat), lng: parseFloat(destLng) };
+
+    // Validate parsed values
+    if (isNaN(origin.lat) || isNaN(origin.lng) || isNaN(destination.lat) || isNaN(destination.lng)) {
+      return res.status(400).json({
+        error: {
+          code: 'INVALID_PARAMS',
+          message: 'All coordinate params must be valid numbers.',
+        },
+      });
+    }
+
+    const { getRoadRoute } = require('../services/osrm');
+    const result = await getRoadRoute(origin, destination);
+
+    res.status(200).json({
+      coordinates: result.coordinates,
+      distanceKm: result.distanceKm,
+      durationMins: result.durationMins,
+      source: result.source,
     });
   } catch (err) {
     next(err);

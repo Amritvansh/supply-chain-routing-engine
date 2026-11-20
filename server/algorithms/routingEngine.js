@@ -78,7 +78,37 @@ function selectOptimalWarehouse({ warehouses, orderItems }) {
 
   // If items require a split shipment, route each group independently
   if (packingResult.status === 'SPLIT_SHIPMENT') {
-    return routeSplitShipment({ warehouses, packingResult });
+    const splitRouteResult = routeSplitShipment({ warehouses, packingResult });
+    if (splitRouteResult.status === 'SPLIT_ROUTED') {
+      return splitRouteResult;
+    }
+
+    // If routeSplitShipment could not fulfill all groups (e.g. items in a group are in different warehouses),
+    // evaluate multi-warehouse split fulfillment based on actual warehouse inventory.
+    const splitResult = evaluateMultiWarehouseFulfillment({ warehouses, orderItems });
+    if (splitResult && splitResult.status === 'MULTI_WAREHOUSE_SPLIT') {
+      return {
+        status: 'MULTI_WAREHOUSE_SPLIT',
+        chosen: splitResult.shipmentGroups[0] ? {
+          warehouseId: splitResult.shipmentGroups[0].warehouseId,
+          name: splitResult.shipmentGroups[0].warehouseName,
+          distanceKm: splitResult.shipmentGroups[0].distanceKm,
+          boxSize: splitResult.shipmentGroups[0].boxSize,
+          costBreakdown: splitResult.shipmentGroups[0].costBreakdown,
+          totalCost: splitResult.shipmentGroups[0].totalCost,
+        } : null,
+        alternatives: [],
+        packing: packingResult,
+        shipmentGroups: splitResult.shipmentGroups,
+        shipmentCount: splitResult.shipmentCount,
+        splitPenalty: splitResult.splitPenalty,
+        fulfillmentType: 'SPLIT_SHIPMENT',
+        totalCost: splitResult.totalCost,
+        message: splitResult.message,
+      };
+    }
+
+    return splitRouteResult;
   }
 
   // Step 2: For single-box orders, evaluate each warehouse
@@ -337,6 +367,18 @@ function routeSplitShipment({ warehouses, packingResult }) {
     chosen: shipmentPlan[0]?.chosen || null,
     alternatives: shipmentPlan[0]?.alternatives || [],
     shipmentPlan,
+    shipmentGroups: fullyRoutable
+      ? shipmentPlan.map(p => ({
+          warehouseId: p.chosen.warehouseId,
+          warehouseName: p.chosen.name,
+          distanceKm: p.chosen.distanceKm,
+          boxSize: p.boxSize,
+          items: p.items,
+          costBreakdown: p.chosen.costBreakdown,
+          totalCost: p.chosen.totalCost,
+        }))
+      : [],
+    fulfillmentType: fullyRoutable ? 'SPLIT_SHIPMENT' : 'SINGLE_SHIPMENT',
     packing: packingResult,
     totalCost: Math.round(totalCost * 100) / 100,
     message: fullyRoutable

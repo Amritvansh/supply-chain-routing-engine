@@ -106,13 +106,20 @@ async function executeCheckout({
       });
     }
 
-    const isSplit = routingDecision.fulfillmentType === 'SPLIT_SHIPMENT';
+    const isSplit = routingDecision.fulfillmentType === 'SPLIT_SHIPMENT' ||
+                    routingDecision.status === 'MULTI_WAREHOUSE_SPLIT' ||
+                    routingDecision.status === 'SPLIT_ROUTED' ||
+                    (Array.isArray(routingDecision.shipmentGroups) && routingDecision.shipmentGroups.length > 1);
     const status = isSplit ? 'MULTI_WAREHOUSE_SPLIT' : 'ROUTED';
     
     // Determine the shipments to create
     const shipmentsData = isSplit 
-      ? routingDecision.shipmentGroups
+      ? (routingDecision.shipmentGroups || routingDecision.shipmentPlan)
       : [routingDecision.chosen];
+
+    if (!isSplit && (!shipmentsData[0] || !shipmentsData[0].warehouseId)) {
+      throw new DatabaseTransactionError('Routing decision did not produce a valid chosen warehouse.');
+    }
 
     // Build a flat list of all item deductions across all shipments
     const inventoryDeductions = [];

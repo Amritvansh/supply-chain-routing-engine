@@ -118,7 +118,7 @@ describe('Google Maps Distance Service', () => {
     const dest = { lat: 33.9425, lng: -118.408 };
     const result = await googleMaps.getDistance(origin, dest);
 
-    expect(result.source).toBe('haversine');
+    expect(['haversine', 'osrm_road']).toContain(result.source);
     expect(result.distanceKm).toBeGreaterThan(0);
 
     envModule.GOOGLE_MAPS_API_KEY = savedKey;

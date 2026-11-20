@@ -1,18 +1,22 @@
 /**
- * Google Maps Distance Service — with Haversine Fallback
+ * Distance Service — Google Maps → OSRM → Haversine Fallback Chain
  *
- * Wraps the Google Maps Distance Matrix API for warehouse-to-customer
- * distance calculation. Automatically falls back to the deterministic
- * Haversine calculator when:
- *   - GOOGLE_MAPS_API_KEY is not set
- *   - The API request fails (network error, 4xx/5xx)
- *   - The API request times out (hard 3s limit)
- *   - The API returns an unexpected response shape
+ * Wraps distance calculation with a three-tier fallback strategy:
+ *
+ *   1. Google Maps Distance Matrix API (if GOOGLE_MAPS_API_KEY is set)
+ *      → Returns road distance from Google's proprietary road network
+ *   2. OSRM (Open Source Routing Machine) — FREE, no API key needed
+ *      → Returns real driving distance + full road geometry from OpenStreetMap
+ *   3. Haversine with Circuity Factor (pure math, zero I/O)
+ *      → Returns estimated road distance (haversine × 1.3)
  *
  * This service NEVER throws. Every code path returns a valid
- * { distanceKm, source } result. The `source` field ('google_maps'
- * or 'haversine') lets callers and demo audiences see which path
- * was taken.
+ * { distanceKm, durationMins, coordinates, source } result.
+ *
+ * The `coordinates` field is an array of [lng, lat] points tracing
+ * the actual road path. When only Haversine is available, this contains
+ * just the origin and destination (straight line). When OSRM or Google
+ * provides data, it contains hundreds of points along real streets.
  *
  * @module services/googleMaps
  */
@@ -21,24 +25,61 @@
 
 const env = require('../config/env');
 const { calculateHaversineDistance, calculateMultipleDistances } = require('./haversine');
+const { getRoadRoute, getRoadRoutes } = require('./osrm');
 
 const GOOGLE_MAPS_TIMEOUT_MS = 3000;
 const DISTANCE_MATRIX_BASE_URL = 'https://maps.googleapis.com/maps/api/distancematrix/json';
 
 /**
- * Get the driving distance between an origin and a single destination
- * using the Google Maps Distance Matrix API, with Haversine fallback.
+ * Get the driving distance between an origin and a single destination.
+ *
+ * Fallback chain: Google Maps → OSRM → Haversine
  *
  * @param {{ lat: number, lng: number }} origin
  * @param {{ lat: number, lng: number }} destination
- * @returns {Promise<{ distanceKm: number, source: string }>}
+ * @returns {Promise<{ distanceKm: number, durationMins: number|null, coordinates: Array<[number,number]>|null, source: string }>}
  */
 async function getDistance(origin, destination) {
-  // Fast path: if no API key, skip the network call entirely
-  if (!env.GOOGLE_MAPS_API_KEY) {
-    return calculateHaversineDistance(origin, destination);
+  // Tier 1: If Google Maps API key is set, try Google first
+  if (env.GOOGLE_MAPS_API_KEY) {
+    const googleResult = await tryGoogleMaps(origin, destination);
+    if (googleResult) return googleResult;
   }
 
+  // Tier 2: OSRM (free, real road distance + geometry)
+  const osrmResult = await getRoadRoute(origin, destination);
+  return osrmResult;
+}
+
+/**
+ * Get distances from one origin to multiple destinations.
+ *
+ * Fallback chain: Google Maps → OSRM → Haversine
+ *
+ * @param {{ lat: number, lng: number }} origin
+ * @param {Array<{ lat: number, lng: number }>} destinations
+ * @returns {Promise<Array<{ distanceKm: number, durationMins: number|null, coordinates: Array<[number,number]>|null, source: string }>>}
+ */
+async function getDistances(origin, destinations) {
+  // Tier 1: Try Google Maps batch API
+  if (env.GOOGLE_MAPS_API_KEY) {
+    const googleResult = await tryGoogleMapsBatch(origin, destinations);
+    if (googleResult) return googleResult;
+  }
+
+  // Tier 2: OSRM (parallel requests, each with independent fallback)
+  return getRoadRoutes(origin, destinations);
+}
+
+/**
+ * Attempt to fetch distance from Google Maps Distance Matrix API.
+ * Returns null if the request fails (caller should fall through to OSRM).
+ *
+ * @param {{ lat: number, lng: number }} origin
+ * @param {{ lat: number, lng: number }} destination
+ * @returns {Promise<{ distanceKm: number, durationMins: number|null, coordinates: Array|null, source: string }|null>}
+ */
+async function tryGoogleMaps(origin, destination) {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), GOOGLE_MAPS_TIMEOUT_MS);
@@ -56,8 +97,8 @@ async function getDistance(origin, destination) {
     clearTimeout(timeout);
 
     if (!response.ok) {
-      console.warn(`[GoogleMaps] API returned ${response.status}, falling back to Haversine`);
-      return calculateHaversineDistance(origin, destination);
+      console.warn(`[GoogleMaps] API returned ${response.status}, falling back to OSRM`);
+      return null;
     }
 
     const data = await response.json();
@@ -68,42 +109,41 @@ async function getDistance(origin, destination) {
       !data.rows?.[0]?.elements?.[0] ||
       data.rows[0].elements[0].status !== 'OK'
     ) {
-      console.warn('[GoogleMaps] Unexpected response structure, falling back to Haversine');
-      return calculateHaversineDistance(origin, destination);
+      console.warn('[GoogleMaps] Unexpected response structure, falling back to OSRM');
+      return null;
     }
 
-    const distanceMeters = data.rows[0].elements[0].distance.value;
-    const distanceKm = Math.round((distanceMeters / 1000) * 100) / 100;
+    const element = data.rows[0].elements[0];
+    const distanceKm = Math.round((element.distance.value / 1000) * 100) / 100;
+    const durationMins = element.duration ? Math.round(element.duration.value / 60) : null;
 
     return {
       distanceKm,
+      durationMins,
+      // Google Distance Matrix doesn't return geometry — road coordinates
+      // will be fetched separately by the frontend via OSRM if needed
+      coordinates: null,
       source: 'google_maps',
     };
   } catch (err) {
     if (err.name === 'AbortError') {
-      console.warn('[GoogleMaps] Request timed out after 3s, falling back to Haversine');
+      console.warn('[GoogleMaps] Request timed out after 3s, falling back to OSRM');
     } else {
-      console.warn(`[GoogleMaps] Request failed: ${err.message}, falling back to Haversine`);
+      console.warn(`[GoogleMaps] Request failed: ${err.message}, falling back to OSRM`);
     }
-    return calculateHaversineDistance(origin, destination);
+    return null;
   }
 }
 
 /**
- * Get distances from one origin to multiple destinations.
- *
- * When the Google Maps API is unavailable, all destinations fall back
- * to Haversine in a single synchronous pass (no per-destination retry).
+ * Attempt batch distance fetch from Google Maps.
+ * Returns null if request fails.
  *
  * @param {{ lat: number, lng: number }} origin
  * @param {Array<{ lat: number, lng: number }>} destinations
- * @returns {Promise<Array<{ distanceKm: number, source: string }>>}
+ * @returns {Promise<Array|null>}
  */
-async function getDistances(origin, destinations) {
-  if (!env.GOOGLE_MAPS_API_KEY) {
-    return calculateMultipleDistances(origin, destinations);
-  }
-
+async function tryGoogleMapsBatch(origin, destinations) {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), GOOGLE_MAPS_TIMEOUT_MS);
@@ -123,36 +163,44 @@ async function getDistances(origin, destinations) {
     clearTimeout(timeout);
 
     if (!response.ok) {
-      console.warn(`[GoogleMaps] API returned ${response.status}, falling back to Haversine`);
-      return calculateMultipleDistances(origin, destinations);
+      console.warn(`[GoogleMaps] API returned ${response.status}, falling back to OSRM`);
+      return null;
     }
 
     const data = await response.json();
 
     if (data.status !== 'OK' || !data.rows?.[0]?.elements) {
-      console.warn('[GoogleMaps] Unexpected response, falling back to Haversine');
-      return calculateMultipleDistances(origin, destinations);
+      console.warn('[GoogleMaps] Unexpected response, falling back to OSRM');
+      return null;
     }
 
     const elements = data.rows[0].elements;
 
     return elements.map((el, idx) => {
       if (el.status !== 'OK') {
-        // Individual destination failed — fall back for just this one
-        return calculateHaversineDistance(origin, destinations[idx]);
+        // Individual destination failed — will fall through to OSRM for this one
+        return {
+          distanceKm: calculateHaversineDistance(origin, destinations[idx]).distanceKm,
+          durationMins: null,
+          coordinates: null,
+          source: 'haversine',
+        };
       }
+      const durationMins = el.duration ? Math.round(el.duration.value / 60) : null;
       return {
         distanceKm: Math.round((el.distance.value / 1000) * 100) / 100,
+        durationMins,
+        coordinates: null,
         source: 'google_maps',
       };
     });
   } catch (err) {
     if (err.name === 'AbortError') {
-      console.warn('[GoogleMaps] Request timed out after 3s, falling back to Haversine');
+      console.warn('[GoogleMaps] Request timed out after 3s, falling back to OSRM');
     } else {
-      console.warn(`[GoogleMaps] Request failed: ${err.message}, falling back to Haversine`);
+      console.warn(`[GoogleMaps] Request failed: ${err.message}, falling back to OSRM`);
     }
-    return calculateMultipleDistances(origin, destinations);
+    return null;
   }
 }
 
@@ -160,3 +208,4 @@ module.exports = {
   getDistance,
   getDistances,
 };
+

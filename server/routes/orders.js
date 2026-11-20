@@ -155,13 +155,15 @@ router.post('/checkout',
       // ── Step 2: Calculate distances ──────────────────────────
       const customerLocation = { lat: customerLat, lng: customerLng };
 
-      for (const wh of warehouses) {
-        const result = await getDistance(
-          { lat: wh.lat, lng: wh.lng },
-          customerLocation
-        );
-        wh.distanceKm = result.distanceKm;
-      }
+      await Promise.all(
+        warehouses.map(async (wh) => {
+          const result = await getDistance(
+            { lat: wh.lat, lng: wh.lng },
+            customerLocation
+          );
+          wh.distanceKm = result.distanceKm;
+        })
+      );
 
       // ── Step 3: Fetch SKU dimensions for bin-packing ────────
       const skuList = items.map(i => i.sku);
@@ -211,7 +213,7 @@ router.post('/checkout',
 
       if (routingResult.status !== 'ROUTED' &&
           routingResult.status !== 'SPLIT_ROUTED' &&
-          routingResult.status !== 'PARTIAL_SPLIT') {
+          routingResult.status !== 'MULTI_WAREHOUSE_SPLIT') {
         log.warn({ routingStatus: routingResult.status }, 'Checkout: routing failed');
         return res.status(409).json({
           error: {
@@ -396,9 +398,54 @@ router.get('/all', verifyToken, requireHost, getAllOrders);
 // ─── GET /api/v1/orders/host/:id ────────────────────────────────
 /**
  * Host-only: Returns full order detail with routing analysis.
- * Must be registered before /:id to prevent 'host' being parsed as UUID.
  */
 router.get('/host/:id', verifyToken, requireHost, getHostOrderDetail);
+
+// ─── GET /api/v1/orders/road-geometry ───────────────────────────
+/**
+ * GET /api/v1/orders/road-geometry
+ *
+ * Public/customer-safe road geometry endpoint. Returns actual driving route
+ * coordinates (array of [lng, lat]) via OSRM to render realistic road curves.
+ */
+router.get('/road-geometry', async (req, res, next) => {
+  try {
+    const { originLat, originLng, destLat, destLng } = req.query;
+
+    if (!originLat || !originLng || !destLat || !destLng) {
+      return res.status(400).json({
+        error: {
+          code: 'MISSING_PARAMS',
+          message: 'Required query params: originLat, originLng, destLat, destLng',
+        },
+      });
+    }
+
+    const origin = { lat: parseFloat(originLat), lng: parseFloat(originLng) };
+    const destination = { lat: parseFloat(destLat), lng: parseFloat(destLng) };
+
+    if (isNaN(origin.lat) || isNaN(origin.lng) || isNaN(destination.lat) || isNaN(destination.lng)) {
+      return res.status(400).json({
+        error: {
+          code: 'INVALID_PARAMS',
+          message: 'All coordinate params must be valid numbers.',
+        },
+      });
+    }
+
+    const { getRoadRoute } = require('../services/osrm');
+    const result = await getRoadRoute(origin, destination);
+
+    res.status(200).json({
+      coordinates: result.coordinates,
+      distanceKm: result.distanceKm,
+      durationMins: result.durationMins,
+      source: result.source,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
 
 // ─── GET /api/v1/orders/track/:id ───────────────────────────────
 /**
@@ -552,25 +599,50 @@ router.get('/track/:id',
         lineTotal: parseFloat(row.price) * row.qty,
       }));
 
-      const shipments = shipmentResult.rows.map(row => {
-        const shipItems = shipmentItemsResult.rows
-          .filter(si => si.shipment_id === row.shipment_id)
-          .map(si => ({
-            sku: si.sku,
-            name: si.sku_name,
-            qty: si.qty,
-          }));
+      const { getRoadRoute } = require('../services/osrm');
+      const shipments = await Promise.all(
+        shipmentResult.rows.map(async (row) => {
+          const shipItems = shipmentItemsResult.rows
+            .filter(si => si.shipment_id === row.shipment_id)
+            .map(si => ({
+              sku: si.sku,
+              name: si.sku_name,
+              qty: si.qty,
+            }));
 
-        return {
-          id: row.shipment_id,
-          warehouseLat: parseFloat(row.warehouse_lat),
-          warehouseLng: parseFloat(row.warehouse_lng),
-          warehouseName: row.warehouse_name,
-          distanceKm: parseFloat(row.distance_km),
-          totalCost: parseFloat(row.total_cost),
-          items: shipItems,
-        };
-      });
+          const whLat = parseFloat(row.warehouse_lat);
+          const whLng = parseFloat(row.warehouse_lng);
+          const custLat = order.customer_lat ? parseFloat(order.customer_lat) : null;
+          const custLng = order.customer_lng ? parseFloat(order.customer_lng) : null;
+
+          let coordinates = null;
+          if (whLat && whLng && custLat && custLng) {
+            try {
+              const road = await getRoadRoute(
+                { lat: whLat, lng: whLng },
+                { lat: custLat, lng: custLng }
+              );
+              coordinates = road.coordinates;
+            } catch {
+              coordinates = [
+                [whLng, whLat],
+                [custLng, custLat],
+              ];
+            }
+          }
+
+          return {
+            id: row.shipment_id,
+            warehouseLat: whLat,
+            warehouseLng: whLng,
+            warehouseName: row.warehouse_name,
+            distanceKm: parseFloat(row.distance_km),
+            totalCost: parseFloat(row.total_cost),
+            items: shipItems,
+            coordinates,
+          };
+        })
+      );
 
       const isSplit = (order.fulfillment_type === 'SPLIT_SHIPMENT') || shipments.length > 1;
 
@@ -963,13 +1035,15 @@ router.post('/quote',
 
       // ── Step 2: Calculate distances ────────────────────────
       const customerLocation = { lat: customerLat, lng: customerLng };
-      for (const wh of warehouses) {
-        const result = await getDistance(
-          { lat: wh.lat, lng: wh.lng },
-          customerLocation
-        );
-        wh.distanceKm = result.distanceKm;
-      }
+      await Promise.all(
+        warehouses.map(async (wh) => {
+          const result = await getDistance(
+            { lat: wh.lat, lng: wh.lng },
+            customerLocation
+          );
+          wh.distanceKm = result.distanceKm;
+        })
+      );
 
       // ── Step 3: Fetch SKU dimensions + prices ──────────────
       const skuList = items.map(i => i.sku);
@@ -1018,7 +1092,7 @@ router.post('/quote',
 
       if (routingResult.status !== 'ROUTED' &&
           routingResult.status !== 'SPLIT_ROUTED' &&
-          routingResult.status !== 'PARTIAL_SPLIT') {
+          routingResult.status !== 'MULTI_WAREHOUSE_SPLIT') {
         return res.status(200).json({
           deliveryFee: null,
           subtotal: null,
@@ -1029,7 +1103,9 @@ router.post('/quote',
       }
 
       // ── Step 5: Calculate subtotal + delivery fee ───────────
-      const deliveryFee = Math.round(routingResult.chosen.totalCost * 100) / 100;
+      const deliveryFee = Math.round(
+        (routingResult.totalCost ?? routingResult.chosen?.totalCost ?? 0) * 100
+      ) / 100;
 
       let subtotal = 0;
       const itemBreakdown = items.map(item => {
@@ -1049,7 +1125,7 @@ router.post('/quote',
       const total = Math.round((subtotal + deliveryFee) * 100) / 100;
 
       // Estimate delivery days based on distance
-      const distanceKm = routingResult.chosen.distanceKm;
+      const distanceKm = routingResult.chosen?.distanceKm || (routingResult.shipmentGroups?.[0]?.distanceKm ?? 100);
       const estimatedDays = distanceKm < 100 ? 1 : distanceKm < 500 ? 2 : distanceKm < 1000 ? 3 : 5;
 
       log.info({ deliveryFee, subtotal, total, distanceKm }, 'Quote: calculated');
@@ -1060,7 +1136,7 @@ router.post('/quote',
         total,
         estimatedDays,
         items: itemBreakdown,
-        boxSize: routingResult.chosen.boxSize,
+        boxSize: routingResult.chosen?.boxSize || routingResult.shipmentGroups?.[0]?.boxSize || 'SPLIT',
       });
     } catch (err) {
       next(err);

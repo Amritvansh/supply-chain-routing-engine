@@ -78,34 +78,82 @@ export default function CustomerOrderTrack() {
         bounds.extend([sh.warehouseLng, sh.warehouseLat]);
         
         const routeId = `route-${i}`;
+        const initialCoords = (sh.coordinates && sh.coordinates.length > 1)
+          ? sh.coordinates
+          : [
+              [sh.warehouseLng, sh.warehouseLat],
+              [order.customerLng, order.customerLat]
+            ];
+        const isRoadRoute = initialCoords.length > 2;
+
+        const makeGeojson = (coords) => ({
+          type: 'Feature',
+          geometry: {
+            type: 'LineString',
+            coordinates: coords,
+          },
+        });
+
         if (!map.getSource(routeId)) {
           map.addSource(routeId, {
             type: 'geojson',
-            data: {
-              type: 'Feature',
-              geometry: {
-                type: 'LineString',
-                coordinates: [
-                  [sh.warehouseLng, sh.warehouseLat],
-                  [order.customerLng, order.customerLat]
-                ]
-              }
-            }
+            data: makeGeojson(initialCoords),
           });
+
+          // Glow layer underneath
+          map.addLayer({
+            id: `${routeId}-glow`,
+            type: 'line',
+            source: routeId,
+            layout: {
+              'line-join': 'round',
+              'line-cap': 'round',
+            },
+            paint: {
+              'line-color': routeColor,
+              'line-width': isRoadRoute ? 7 : 4,
+              'line-opacity': 0.25,
+            },
+          });
+
+          // Main road route line
           map.addLayer({
             id: routeId,
             type: 'line',
             source: routeId,
             layout: {
               'line-join': 'round',
-              'line-cap': 'round'
+              'line-cap': 'round',
             },
             paint: {
               'line-color': routeColor,
-              'line-width': 3,
-              'line-dasharray': [2, 4]
-            }
+              'line-width': isRoadRoute ? 3.5 : 2.5,
+              'line-opacity': 0.9,
+              ...(isRoadRoute ? {} : { 'line-dasharray': [2, 4] }),
+            },
           });
+        }
+
+        // If road geometry wasn't pre-populated, fetch it dynamically
+        if (!isRoadRoute && sh.warehouseLat && sh.warehouseLng && order.customerLat && order.customerLng) {
+          api.getRoadGeometry(sh.warehouseLat, sh.warehouseLng, order.customerLat, order.customerLng)
+            .then((res) => {
+              if (res?.coordinates && res.coordinates.length > 2 && map.getSource(routeId)) {
+                map.getSource(routeId).setData(makeGeojson(res.coordinates));
+                if (map.getLayer(routeId)) {
+                  map.setPaintProperty(routeId, 'line-width', 3.5);
+                  map.setPaintProperty(routeId, 'line-opacity', 0.9);
+                  map.setPaintProperty(routeId, 'line-dasharray', null);
+                }
+                if (map.getLayer(`${routeId}-glow`)) {
+                  map.setPaintProperty(`${routeId}-glow`, 'line-width', 7);
+                  map.setPaintProperty(`${routeId}-glow`, 'line-opacity', 0.25);
+                }
+              }
+            })
+            .catch(() => {
+              // Silently keep straight line
+            });
         }
       });
       

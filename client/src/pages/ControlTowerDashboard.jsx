@@ -666,7 +666,7 @@ export default function ControlTowerDashboard() {
     });
   }
 
-  /** Add route lines (warehouse → customer) using GeoJSON. */
+  /** Add route lines (warehouse → customer) using GeoJSON with real road curvature. */
   function addRoutes(map, routeList) {
     if (!routeList || routeList.length === 0) return;
 
@@ -699,42 +699,88 @@ export default function ControlTowerDashboard() {
         const sourceId = `route-${routeIdx}-${shipIdx}`;
         const color = ROUTE_COLORS[shipIdx % ROUTE_COLORS.length];
 
-        const geojson = {
+        const initialCoords = (shipment.coordinates && shipment.coordinates.length > 1)
+          ? shipment.coordinates
+          : [
+              [shipment.warehouseLng, shipment.warehouseLat],
+              [customerLng, customerLat],
+            ];
+
+        const isRoadRoute = initialCoords.length > 2;
+
+        const makeGeojson = (coords) => ({
           type: 'Feature',
           geometry: {
             type: 'LineString',
-            coordinates: [
-              [shipment.warehouseLng, shipment.warehouseLat],
-              [customerLng, customerLat],
-            ],
+            coordinates: coords,
           },
           properties: {
             warehouseName: shipment.warehouseName,
             distanceKm: shipment.distanceKm,
             boxSize: shipment.boxSize,
           },
-        };
+        });
 
-        // Check if source already exists
+        // Add or update source
         if (map.getSource(sourceId)) {
-          map.getSource(sourceId).setData(geojson);
+          map.getSource(sourceId).setData(makeGeojson(initialCoords));
         } else {
-          map.addSource(sourceId, { type: 'geojson', data: geojson });
+          map.addSource(sourceId, { type: 'geojson', data: makeGeojson(initialCoords) });
+
+          // Subtle glow under the route line
           map.addLayer({
-            id: `${sourceId}-line`,
+            id: `${sourceId}-glow`,
             type: 'line',
             source: sourceId,
             paint: {
               'line-color': color,
-              'line-width': 2.5,
-              'line-opacity': 0.7,
-              'line-dasharray': [2, 2],
+              'line-width': isRoadRoute ? 7 : 4,
+              'line-opacity': 0.25,
             },
             layout: {
               'line-cap': 'round',
               'line-join': 'round',
             },
           });
+
+          // Primary route line
+          map.addLayer({
+            id: `${sourceId}-line`,
+            type: 'line',
+            source: sourceId,
+            paint: {
+              'line-color': color,
+              'line-width': isRoadRoute ? 3.5 : 2.5,
+              'line-opacity': 0.9,
+              ...(isRoadRoute ? {} : { 'line-dasharray': [2, 2] }),
+            },
+            layout: {
+              'line-cap': 'round',
+              'line-join': 'round',
+            },
+          });
+        }
+
+        // If road coordinates weren't preloaded, fetch them dynamically via OSRM
+        if (!isRoadRoute && shipment.warehouseLat && shipment.warehouseLng && customerLat && customerLng) {
+          api.getRoadGeometry(shipment.warehouseLat, shipment.warehouseLng, customerLat, customerLng)
+            .then((res) => {
+              if (res?.coordinates && res.coordinates.length > 2 && map.getSource(sourceId)) {
+                map.getSource(sourceId).setData(makeGeojson(res.coordinates));
+                if (map.getLayer(`${sourceId}-line`)) {
+                  map.setPaintProperty(`${sourceId}-line`, 'line-width', 3.5);
+                  map.setPaintProperty(`${sourceId}-line`, 'line-opacity', 0.9);
+                  map.setPaintProperty(`${sourceId}-line`, 'line-dasharray', null);
+                }
+                if (map.getLayer(`${sourceId}-glow`)) {
+                  map.setPaintProperty(`${sourceId}-glow`, 'line-width', 7);
+                  map.setPaintProperty(`${sourceId}-glow`, 'line-opacity', 0.25);
+                }
+              }
+            })
+            .catch(() => {
+              // Silently keep straight-line fallback
+            });
         }
       });
     });

@@ -128,6 +128,18 @@ export function getMapData() {
 }
 
 /**
+ * Fetch real driving road geometry (OSRM array of [lng, lat] coordinates).
+ * @param {number} originLat
+ * @param {number} originLng
+ * @param {number} destLat
+ * @param {number} destLng
+ * @returns {Promise<{ coordinates: Array<[number, number]>, distanceKm: number, durationMins: number, source: string }>}
+ */
+export function getRoadGeometry(originLat, originLng, destLat, destLng) {
+  return request(`/orders/road-geometry?originLat=${originLat}&originLng=${originLng}&destLat=${destLat}&destLng=${destLng}`);
+}
+
+/**
  * Trigger a server-side flash-sale stress test.
  * @param {Object} params - { sku, qty, concurrency }
  */
