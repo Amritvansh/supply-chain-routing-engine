@@ -304,7 +304,7 @@ export default function HostOrderDetails() {
               { label: 'Total Shipments', value: routingAnalysis.summary.totalShipments },
               { label: 'Total Items', value: routingAnalysis.summary.totalItems },
               { label: 'Delivery Cost', value: formatCurrency(routingAnalysis.summary.totalDeliveryCost) },
-              { label: 'Split Shipment', value: routingAnalysis.summary.isSplitShipment ? 'Yes' : 'No' },
+              { label: 'Split Shipment', value: routingAnalysis.summary.splitLabel || (routingAnalysis.summary.isSplitShipment ? 'Yes' : 'No') },
             ].map(item => (
               <div key={item.label} style={{ flex: '0 0 auto' }}>
                 <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
@@ -559,7 +559,7 @@ function renderStepData(step, colors, formatCurrency) {
             fontSize: 12, fontWeight: 600, marginBottom: 12,
           }}>
             <span style={{ width: 8, height: 8, borderRadius: '50%', background: step.isSplit ? '#a78bfa' : '#34d399' }} />
-            {step.isSplit ? 'Split Shipment' : 'Single Fulfillment'}
+            {step.splitLabel || (step.isSplit ? 'Split Shipment' : 'Single Fulfillment')}
           </div>
           {step.shipmentGroups?.length > 0 && (
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>

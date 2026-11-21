@@ -255,7 +255,22 @@ async function getHostOrderDetail(req, res, next) {
 function buildRoutingAnalysis(order, items, shipments) {
   const isSplitShipment = shipments.length > 1;
 
-  // Step 1: Geo-Distance Sorting
+  // Track unique warehouses involved in fulfilling this order
+  const uniqueWarehouseMap = new Map();
+  for (const s of shipments) {
+    if (!uniqueWarehouseMap.has(s.warehouseId)) {
+      uniqueWarehouseMap.set(s.warehouseId, {
+        warehouseId: s.warehouseId,
+        warehouseName: s.warehouseName,
+        distanceKm: s.distanceKm,
+      });
+    }
+  }
+  const uniqueWarehouses = Array.from(uniqueWarehouseMap.values());
+  const isMultiWarehouse = uniqueWarehouses.length > 1;
+  const isPackagingSplit = isSplitShipment && !isMultiWarehouse;
+
+  // Step 1: Geo-Distance Sorting (deduplicated by warehouse)
   const step1 = {
     step: 1,
     title: 'Geo-Distance Sorting',
@@ -264,13 +279,22 @@ function buildRoutingAnalysis(order, items, shipments) {
       lat: order.customerLat,
       lng: order.customerLng,
     },
-    warehouseDistances: shipments.map(s => ({
-      warehouseName: s.warehouseName,
-      distanceKm: s.distanceKm,
+    warehouseDistances: uniqueWarehouses.map(w => ({
+      warehouseName: w.warehouseName,
+      distanceKm: w.distanceKm,
     })),
   };
 
   // Step 2: Inventory Availability Check
+  let step2Result;
+  if (isMultiWarehouse) {
+    step2Result = `No single warehouse could fulfill all items — multi-warehouse split required across ${uniqueWarehouses.length} facilities.`;
+  } else if (isPackagingSplit) {
+    step2Result = `All items available and fulfilled from ${uniqueWarehouses[0]?.warehouseName || 'selected warehouse'} (split into ${shipments.length} packages due to container volume limits).`;
+  } else {
+    step2Result = `All items fulfilled from ${uniqueWarehouses[0]?.warehouseName || 'selected warehouse'}.`;
+  }
+
   const step2 = {
     step: 2,
     title: 'Inventory Availability Check',
@@ -280,9 +304,7 @@ function buildRoutingAnalysis(order, items, shipments) {
       productName: i.productName,
       qtyRequested: i.qty,
     })),
-    result: isSplitShipment
-      ? 'No single warehouse could fulfill all items — split shipment required.'
-      : `All items fulfilled from ${shipments[0]?.warehouseName || 'selected warehouse'}.`,
+    result: step2Result,
   };
 
   // Step 3: Fulfillment Cost Calculation
@@ -305,17 +327,32 @@ function buildRoutingAnalysis(order, items, shipments) {
   };
 
   // Step 4: Split Shipment Logic
+  let step4Description;
+  let splitLabel;
+  if (isMultiWarehouse) {
+    step4Description = `Order was split across ${uniqueWarehouses.length} warehouses (${uniqueWarehouses.map(w => w.warehouseName).join(', ')}) because inventory was distributed across facilities.`;
+    splitLabel = 'Multi-Warehouse Split';
+  } else if (isPackagingSplit) {
+    step4Description = `All items fulfilled from ${uniqueWarehouses[0]?.warehouseName}. Order was divided into ${shipments.length} separate packages because total volume exceeds single-container capacity.`;
+    splitLabel = 'Volumetric Packaging Split';
+  } else {
+    step4Description = 'Single-warehouse fulfillment — no split required.';
+    splitLabel = 'Single Fulfillment';
+  }
+
   const step4 = {
     step: 4,
     title: 'Split Shipment Decision',
-    description: isSplitShipment
-      ? `Order was split across ${shipments.length} warehouses because no single warehouse had all items in stock.`
-      : 'Single-warehouse fulfillment — no split required.',
+    description: step4Description,
     isSplit: isSplitShipment,
+    isMultiWarehouse,
+    isPackagingSplit,
+    splitLabel,
     shipmentGroups: shipments.map((s, idx) => ({
       group: idx + 1,
       warehouseName: s.warehouseName,
       warehouseId: s.warehouseId,
+      boxSize: s.boxSize,
     })),
   };
 
@@ -343,6 +380,9 @@ function buildRoutingAnalysis(order, items, shipments) {
       totalDeliveryCost: Math.round(shipments.reduce((s, sh) => s + sh.totalCost, 0) * 100) / 100,
       totalItems: items.reduce((s, i) => s + i.qty, 0),
       isSplitShipment,
+      isMultiWarehouse,
+      isPackagingSplit,
+      splitLabel: isMultiWarehouse ? 'Multi-Warehouse Split' : isPackagingSplit ? 'Packaging Split (1 FC)' : 'No',
     },
   };
 }
