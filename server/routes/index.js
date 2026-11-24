@@ -15,6 +15,7 @@ const webhooksRouter = require('./webhooks');
 const dashboardRouter = require('./dashboard');
 const productsRouter = require('./products');
 const inventoryRouter = require('./inventory');
+const translateRouter = require('./translate');
 
 const router = Router();
 
@@ -41,6 +42,9 @@ router.use('/dashboard', verifyToken, requireHost, dashboardRouter);
 
 // Inventory management (Host-only — stock adjustments)
 router.use('/inventory', inventoryRouter);
+
+// UI multi-language translation helper (isolated leaf route)
+router.use('/translate', translateRouter);
 
 module.exports = router;
 
