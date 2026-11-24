@@ -1,14 +1,10 @@
 /**
- * Shared map styles for MapLibre GL
+ * Shared map style for MapLibre GL — CARTO Voyager
  *
- * Uses OpenFreeMap — free vector tiles from OpenStreetMap data.
- * Vector tiles render sharp at every zoom level and DPI (no blurry pixels).
- * Shows all street names, colony/area names, landmarks, metro stations,
- * hospitals, schools, parks, and building outlines.
- *
- * No API key required.
+ * Vector tiles with street names, area labels, and landmarks.
+ * Free, no API key required.
  */
 
-const OSM_STYLE = 'https://tiles.openfreemap.org/styles/liberty';
+const OSM_STYLE = 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json';
 
 export default OSM_STYLE;
