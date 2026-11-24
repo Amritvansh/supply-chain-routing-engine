@@ -50,7 +50,7 @@ export default function CustomerShop() {
   };
 
   return (
-    <div style={{ fontFamily: 'var(--font-sans)', color: '#e2e8f0', minHeight: '100vh', background: 'var(--color-bg-primary)' }}>
+    <div style={{ fontFamily: 'var(--font-sans)', color: 'var(--color-text-primary)', minHeight: '100vh', background: 'var(--color-bg-primary)' }}>
       {/* Hero */}
       <div style={{
         background: 'linear-gradient(135deg, rgba(16,185,129,0.08), rgba(6,95,70,0.12))',
@@ -61,13 +61,13 @@ export default function CustomerShop() {
           <span style={{ background: 'linear-gradient(135deg, #34d399, #10b981)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Premium Tech</span>{' '}
           Store
         </h1>
-        <p style={{ color: '#94a3b8', fontSize: 14, marginTop: 8 }}>
+        <p style={{ color: 'var(--color-text-secondary)', fontSize: 14, marginTop: 8 }}>
           Optimized routing • Lightning-fast delivery • Best prices
         </p>
 
         {/* Search */}
         <div style={{ maxWidth: 480, margin: '24px auto 0', position: 'relative' }}>
-          <svg style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)' }} width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="#64748b" strokeWidth={2}>
+          <svg style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)' }} width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="var(--color-text-muted)" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
           </svg>
           <input
@@ -75,8 +75,8 @@ export default function CustomerShop() {
             placeholder="Search products..."
             style={{
               width: '100%', padding: '12px 16px 12px 40px',
-              background: 'rgba(15,22,41,0.7)', border: '1px solid rgba(51,65,85,0.4)',
-              borderRadius: 10, color: '#e2e8f0', fontSize: 14,
+              background: 'var(--color-bg-input)', border: '1px solid var(--color-border)',
+              borderRadius: 10, color: 'var(--color-text-primary)', fontSize: 14,
               outline: 'none', fontFamily: 'var(--font-sans)',
             }}
           />
@@ -90,9 +90,9 @@ export default function CustomerShop() {
             <button key={c} onClick={() => setCategory(c)} style={{
               padding: '7px 16px', borderRadius: 20,
               fontSize: 12, fontWeight: 600, cursor: 'pointer',
-              border: category === c ? '1px solid #10b981' : '1px solid rgba(51,65,85,0.4)',
-              background: category === c ? 'rgba(16,185,129,0.15)' : 'rgba(15,22,41,0.5)',
-              color: category === c ? '#34d399' : '#94a3b8',
+              border: category === c ? '1px solid #10b981' : '1px solid var(--color-border)',
+              background: category === c ? 'rgba(16,185,129,0.15)' : 'var(--color-bg-hover)',
+              color: category === c ? '#34d399' : 'var(--color-text-secondary)',
               transition: 'all 0.2s',
             }}>{c}</button>
           ))}
@@ -100,12 +100,12 @@ export default function CustomerShop() {
 
         {/* Product Grid */}
         {loading ? (
-          <div style={{ textAlign: 'center', padding: 80, color: '#64748b' }}>
+          <div style={{ textAlign: 'center', padding: 80, color: 'var(--color-text-muted)' }}>
             <div className="auth-spinner" style={{ margin: '0 auto 12px' }} />
             Loading products...
           </div>
         ) : products.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: 80, color: '#64748b' }}>No products found.</div>
+          <div style={{ textAlign: 'center', padding: 80, color: 'var(--color-text-muted)' }}>No products found.</div>
         ) : (
           <div style={{
             display: 'grid',
@@ -114,7 +114,7 @@ export default function CustomerShop() {
           }}>
             {products.map(p => (
               <div key={p.sku} style={{
-                background: 'rgba(15,22,41,0.65)', border: '1px solid rgba(51,65,85,0.35)',
+                background: 'var(--color-glass)', border: '1px solid var(--color-glass-border)',
                 borderRadius: 14, overflow: 'hidden',
                 transition: 'transform 0.2s, box-shadow 0.2s',
                 cursor: 'pointer',
@@ -124,7 +124,7 @@ export default function CustomerShop() {
               >
                 {/* Image */}
                 <div onClick={() => setSelectedProduct(p)} style={{
-                  height: 200, background: '#0a0f1a', overflow: 'hidden',
+                  height: 200, background: 'var(--color-bg-primary)', overflow: 'hidden',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}>
                   {p.imageUrl ? (
@@ -144,7 +144,7 @@ export default function CustomerShop() {
 
                   <h3 onClick={() => setSelectedProduct(p)} style={{
                     fontSize: 15, fontWeight: 700, margin: '10px 0 6px',
-                    color: '#e2e8f0', lineHeight: 1.3,
+                    color: 'var(--color-text-primary)', lineHeight: 1.3,
                   }}>{p.name}</h3>
 
                   <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>
@@ -160,8 +160,8 @@ export default function CustomerShop() {
                       width: '100%', padding: '10px 0', borderRadius: 8,
                       border: 'none', cursor: p.stockStatus === 'OUT_OF_STOCK' ? 'not-allowed' : 'pointer',
                       fontSize: 13, fontWeight: 700, letterSpacing: '0.02em',
-                      background: addedSku === p.sku ? '#059669' : p.stockStatus === 'OUT_OF_STOCK' ? '#1e293b' : 'linear-gradient(135deg, #10b981, #059669)',
-                      color: p.stockStatus === 'OUT_OF_STOCK' ? '#475569' : 'white',
+                      background: addedSku === p.sku ? '#059669' : p.stockStatus === 'OUT_OF_STOCK' ? 'var(--color-bg-secondary)' : 'linear-gradient(135deg, #10b981, #059669)',
+                      color: p.stockStatus === 'OUT_OF_STOCK' ? 'var(--color-text-muted)' : 'white',
                       transition: 'all 0.3s',
                       transform: addedSku === p.sku ? 'scale(0.97)' : 'scale(1)',
                     }}
@@ -184,7 +184,7 @@ export default function CustomerShop() {
           padding: 24,
         }}>
           <div onClick={e => e.stopPropagation()} style={{
-            background: '#0f1629', border: '1px solid rgba(51,65,85,0.5)',
+            background: 'var(--color-bg-card-solid)', border: '1px solid var(--color-border)',
             borderRadius: 16, maxWidth: 560, width: '100%', overflow: 'hidden',
           }}>
             {selectedProduct.imageUrl && (
@@ -196,15 +196,15 @@ export default function CustomerShop() {
                 color: '#10b981', background: 'rgba(16,185,129,0.1)',
                 padding: '3px 8px', borderRadius: 4,
               }}>{selectedProduct.category}</span>
-              <h2 style={{ fontSize: 22, fontWeight: 800, margin: '12px 0 6px', color: '#e2e8f0' }}>{selectedProduct.name}</h2>
-              <p style={{ fontSize: 13, color: '#94a3b8', lineHeight: 1.6, margin: '0 0 16px' }}>{selectedProduct.description}</p>
+              <h2 style={{ fontSize: 22, fontWeight: 800, margin: '12px 0 6px', color: 'var(--color-text-primary)' }}>{selectedProduct.name}</h2>
+              <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', lineHeight: 1.6, margin: '0 0 16px' }}>{selectedProduct.description}</p>
 
               <div style={{ display: 'flex', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
-                <div style={{ fontSize: 11, color: '#64748b' }}>SKU: <span style={{ color: '#94a3b8' }}>{selectedProduct.sku}</span></div>
+                <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>SKU: <span style={{ color: 'var(--color-text-secondary)' }}>{selectedProduct.sku}</span></div>
                 {selectedProduct.dimensions && (
                   <>
-                    <div style={{ fontSize: 11, color: '#64748b' }}>Size: <span style={{ color: '#94a3b8' }}>{selectedProduct.dimensions.lengthCm}×{selectedProduct.dimensions.widthCm}×{selectedProduct.dimensions.heightCm} cm</span></div>
-                    <div style={{ fontSize: 11, color: '#64748b' }}>Weight: <span style={{ color: '#94a3b8' }}>{selectedProduct.dimensions.weightKg} kg</span></div>
+                    <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>Size: <span style={{ color: 'var(--color-text-secondary)' }}>{selectedProduct.dimensions.lengthCm}×{selectedProduct.dimensions.widthCm}×{selectedProduct.dimensions.heightCm} cm</span></div>
+                    <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>Weight: <span style={{ color: 'var(--color-text-secondary)' }}>{selectedProduct.dimensions.weightKg} kg</span></div>
                   </>
                 )}
               </div>
@@ -221,8 +221,8 @@ export default function CustomerShop() {
                   width: '100%', marginTop: 18, padding: '12px 0', borderRadius: 10,
                   border: 'none', cursor: selectedProduct.stockStatus === 'OUT_OF_STOCK' ? 'not-allowed' : 'pointer',
                   fontSize: 14, fontWeight: 700,
-                  background: selectedProduct.stockStatus === 'OUT_OF_STOCK' ? '#1e293b' : 'linear-gradient(135deg, #10b981, #059669)',
-                  color: selectedProduct.stockStatus === 'OUT_OF_STOCK' ? '#475569' : 'white',
+                  background: selectedProduct.stockStatus === 'OUT_OF_STOCK' ? 'var(--color-bg-secondary)' : 'linear-gradient(135deg, #10b981, #059669)',
+                  color: selectedProduct.stockStatus === 'OUT_OF_STOCK' ? 'var(--color-text-muted)' : 'white',
                 }}
               >
                 {selectedProduct.stockStatus === 'OUT_OF_STOCK' ? 'Unavailable' : 'Add to Cart'}

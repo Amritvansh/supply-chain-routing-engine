@@ -13,28 +13,84 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import AuthForm from '../components/AuthForm';
+import storage from '../lib/storage';
 
 export default function EntryPage() {
   const [selectedRole, setSelectedRole] = useState(null);
-  const { user, loading } = useAuth();
+  const { user, loading, logout } = useAuth();
+  const { currentLanguage, openPicker } = useLanguage();
   const navigate = useNavigate();
 
-  // Redirect if already authenticated
+  // ── Theme toggle (Day / Night) ──────────────────────────────
+  const [isDark, setIsDark] = useState(() => {
+    const saved = storage.getItem('theme');
+    return saved !== 'light';
+  });
+
   useEffect(() => {
-    if (!loading && user) {
-      if (user.role === 'host') {
-        navigate('/host/dashboard', { replace: true });
-      } else {
-        navigate('/customer/shop', { replace: true });
-      }
+    if (isDark) {
+      document.documentElement.classList.remove('light');
+    } else {
+      document.documentElement.classList.add('light');
     }
-  }, [user, loading, navigate]);
+    storage.setItem('theme', isDark ? 'dark' : 'light');
+  }, [isDark]);
+
+  function handleRoleClick(role) {
+    if (user && user.role === role) {
+      navigate(role === 'host' ? '/host/dashboard' : '/customer/shop');
+      return;
+    }
+    setSelectedRole(role);
+  }
+
+  const themeToggleNode = (
+    <div style={{ position: 'fixed', top: 20, right: 24, zIndex: 100, display: 'flex', alignItems: 'center', gap: 10 }}>
+      <button
+        type="button"
+        onClick={openPicker}
+        data-no-translate="true"
+        style={{
+          padding: '7px 14px',
+          borderRadius: 99,
+          border: '1px solid var(--color-border)',
+          background: 'var(--color-bg-card-solid)',
+          color: 'var(--color-text-primary)',
+          fontSize: 12,
+          fontWeight: 600,
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          boxShadow: '0 4px 14px rgba(0,0,0,0.18)',
+        }}
+        title="Choose Language"
+      >
+        <span>🌐</span>
+        <span>{currentLanguage.native}</span>
+        <span style={{ fontSize: 10, opacity: 0.7 }}>▾</span>
+      </button>
+      <button
+        id="entry-theme-toggle"
+        aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+        aria-pressed={!isDark}
+        onClick={() => setIsDark((prev) => !prev)}
+        className={`theme-toggle ${isDark ? 'theme-toggle--dark' : ''}`}
+        title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+      >
+        <span className="theme-toggle__thumb">☀️</span>
+        <span className="theme-toggle__moon">🌙</span>
+      </button>
+    </div>
+  );
 
   // Show auth form if a role is selected
   if (selectedRole) {
     return (
       <div className="entry-page">
+        {themeToggleNode}
         <AuthForm
           role={selectedRole}
           onBack={() => setSelectedRole(null)}
@@ -57,6 +113,7 @@ export default function EntryPage() {
 
   return (
     <div className="entry-page">
+      {themeToggleNode}
       {/* Animated background elements */}
       <div className="entry-bg-grid" />
       <div className="entry-bg-glow entry-bg-glow--1" />
@@ -71,8 +128,47 @@ export default function EntryPage() {
             </svg>
           </div>
           <h1 className="entry-title">SUPPLY CHAIN<br />ROUTING ENGINE</h1>
-          <p className="entry-subtitle">Optimize • Route • Fulfill • Analyze</p>
+          <p className="entry-subtitle">Intelligent Routing • Real-time Tracking • AI Analytics</p>
         </div>
+
+        {/* Active Session Banner (if already signed in) */}
+        {user && (
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 10,
+              flexWrap: 'wrap',
+              padding: '8px 16px',
+              marginBottom: 16,
+              borderRadius: 99,
+              background: 'var(--color-bg-card)',
+              border: '1px solid var(--color-border)',
+              fontSize: 12,
+              color: 'var(--color-text-secondary)',
+            }}
+          >
+            <span>
+              Signed in as <strong style={{ color: 'var(--color-text-primary)' }}>{user.name}</strong> ({user.role?.toUpperCase()})
+            </span>
+            <button
+              onClick={logout}
+              style={{
+                padding: '3px 10px',
+                borderRadius: 99,
+                border: '1px solid rgba(239, 68, 68, 0.35)',
+                background: 'rgba(239, 68, 68, 0.12)',
+                color: '#f87171',
+                fontSize: 11,
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              Sign Out / Switch
+            </button>
+          </div>
+        )}
 
         {/* Divider */}
         <div className="entry-divider">
@@ -84,7 +180,7 @@ export default function EntryPage() {
           {/* Customer Card */}
           <button
             className="entry-card entry-card--customer"
-            onClick={() => setSelectedRole('customer')}
+            onClick={() => handleRoleClick('customer')}
           >
             <div className="entry-card-icon entry-card-icon--customer">
               <svg width="32" height="32" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -101,14 +197,14 @@ export default function EntryPage() {
               <span>📦 Track Orders</span>
             </div>
             <div className="entry-card-action entry-card-action--customer">
-              Enter as Customer →
+              {user?.role === 'customer' ? `Continue as ${user.name} →` : 'Sign In as Customer →'}
             </div>
           </button>
 
           {/* Host Card */}
           <button
             className="entry-card entry-card--host"
-            onClick={() => setSelectedRole('host')}
+            onClick={() => handleRoleClick('host')}
           >
             <div className="entry-card-icon entry-card-icon--host">
               <svg width="32" height="32" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -125,14 +221,14 @@ export default function EntryPage() {
               <span>📊 Analytics</span>
             </div>
             <div className="entry-card-action entry-card-action--host">
-              Enter as Host →
+              {user?.role === 'host' ? `Continue as ${user.name} →` : 'Sign In as Host →'}
             </div>
           </button>
         </div>
 
         {/* Footer */}
         <p className="entry-footer">
-          College Major Project • Distributed Logistics Platform • 2026
+          Distributed Logistics Platform • Hybrid Architecture • v2.0
         </p>
       </div>
     </div>

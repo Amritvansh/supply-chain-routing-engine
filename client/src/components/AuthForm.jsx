@@ -194,14 +194,32 @@ export default function AuthForm({ role = 'customer', onBack }) {
 
         {/* Demo credentials hint for host */}
         {role === 'host' && isLogin && (
-          <div className="auth-hint">
-            <span>Demo:</span> host@supplychain.com / host123
-          </div>
+          <>
+            <div className="auth-hint">
+              <span>Demo:</span> host@supplychain.com / host123
+            </div>
+            <button
+              type="button"
+              className="auth-demo-fill-btn"
+              onClick={() => { setEmail('host@supplychain.com'); setPassword('host123'); }}
+            >
+              ⚡ Quick Fill Demo Credentials
+            </button>
+          </>
         )}
         {role === 'customer' && isLogin && (
-          <div className="auth-hint">
-            <span>Demo:</span> customer@test.com / customer123
-          </div>
+          <>
+            <div className="auth-hint">
+              <span>Demo:</span> customer@test.com / customer123
+            </div>
+            <button
+              type="button"
+              className="auth-demo-fill-btn"
+              onClick={() => { setEmail('customer@test.com'); setPassword('customer123'); }}
+            >
+              ⚡ Quick Fill Demo Credentials
+            </button>
+          </>
         )}
       </div>
     </div>
