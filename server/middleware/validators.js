@@ -56,7 +56,13 @@ const checkoutBodySchema = z.object({
   items: z
     .array(checkoutItemSchema, { required_error: 'items array is required' })
     .min(1, 'items must be a non-empty array'),
-});
+  userId: z.string().optional().nullable(),
+  customerName: z.string().optional().nullable(),
+  customerPhone: z.string().optional().nullable(),
+  shippingAddress: z.string().optional().nullable(),
+  pincode: z.string().optional().nullable(),
+  totalAmount: z.number().optional().nullable(),
+}).passthrough();
 
 // ─── Flash-Test Schema ──────────────────────────────────────
 
