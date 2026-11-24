@@ -217,9 +217,8 @@ export default function HostOrderDetails() {
           {[
             { label: 'Customer', value: order.customerName || 'Guest' },
             { label: 'Phone', value: order.customerPhone || '—' },
-            { label: 'Address', value: order.shippingAddress || '—' },
+            { label: 'Address', value: order.shippingAddress || `${order.customerLat?.toFixed(4)}, ${order.customerLng?.toFixed(4)}` },
             { label: 'PIN Code', value: order.pincode || '—' },
-            { label: 'Location', value: `${order.customerLat?.toFixed(4)}, ${order.customerLng?.toFixed(4)}` },
             { label: 'Items', value: `${items.length} product${items.length !== 1 ? 's' : ''}` },
           ].map(m => (
             <div key={m.label}>
@@ -402,8 +401,7 @@ export default function HostOrderDetails() {
 
               {[
                 { label: 'Warehouse', value: sh.warehouseName },
-                { label: 'Location', value: `${sh.warehouseLat.toFixed(4)}, ${sh.warehouseLng.toFixed(4)}` },
-                { label: 'Distance', value: `${sh.distanceKm.toFixed(1)} km` },
+                { label: 'Road Distance', value: `${sh.distanceKm.toFixed(1)} km` },
                 { label: 'Shipping Cost', value: formatCurrency(sh.totalCost) },
                 { label: 'Shipped At', value: formatDate(sh.shippedAt) },
               ].map(row => (

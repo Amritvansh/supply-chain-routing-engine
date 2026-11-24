@@ -274,7 +274,7 @@ function buildRoutingAnalysis(order, items, shipments) {
   const step1 = {
     step: 1,
     title: 'Geo-Distance Sorting',
-    description: 'Warehouses sorted by Haversine distance to customer location.',
+    description: 'Warehouses sorted by driving road distance (OSRM / Google Maps) to customer location.',
     customerLocation: {
       lat: order.customerLat,
       lng: order.customerLng,
@@ -308,13 +308,13 @@ function buildRoutingAnalysis(order, items, shipments) {
   };
 
   // Step 3: Fulfillment Cost Calculation
-  const PACKAGING_COST = { SMALL: 1, MEDIUM: 3, LARGE: 7 };
+  const PACKAGING_COST = { SMALL: 10, MEDIUM: 30, LARGE: 50 };
   const step3 = {
     step: 3,
     title: 'Fulfillment Cost Calculation',
-    description: 'Cost = (distance × ₹0.50/km) + packaging_base + depletion_penalty',
+    description: 'Cost = (distance × ₹0.75/km) + packaging_base + depletion_penalty',
     shipmentCosts: shipments.map(s => {
-      const distanceCost = Math.round(s.distanceKm * 0.5 * 100) / 100;
+      const distanceCost = Math.round(s.distanceKm * 0.75 * 100) / 100;
       const packagingCost = PACKAGING_COST[s.boxSize] || 0;
       return {
         warehouseName: s.warehouseName,

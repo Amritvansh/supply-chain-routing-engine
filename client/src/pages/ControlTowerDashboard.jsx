@@ -565,7 +565,7 @@ export default function ControlTowerDashboard() {
 
     const map = new maplibregl.Map({
       container: mapContainerRef.current,
-      style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
+      style: 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json',
       center: [avgLng, avgLat],
       zoom: 4.5,
       attributionControl: true,

@@ -51,12 +51,15 @@ export default function CheckoutPage() {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           const { latitude, longitude } = pos.coords;
-          setLat(Math.round(latitude * 10000) / 10000);
-          setLng(Math.round(longitude * 10000) / 10000);
+          const rLat = Math.round(latitude * 10000) / 10000;
+          const rLng = Math.round(longitude * 10000) / 10000;
+          setLat(rLat);
+          setLng(rLng);
           if (mapRef.current && markerRef.current) {
-            mapRef.current.flyTo({ center: [longitude, latitude], zoom: 12 });
+            mapRef.current.flyTo({ center: [longitude, latitude], zoom: 15 });
             markerRef.current.setLngLat([longitude, latitude]);
           }
+          fetchLocationName(rLat, rLng);
         },
         (err) => console.warn('Geolocation failed', err),
         { enableHighAccuracy: true, timeout: 5000 }
@@ -69,9 +72,9 @@ export default function CheckoutPage() {
     if (mapRef.current || !mapContainerRef.current) return;
     const map = new maplibregl.Map({
       container: mapContainerRef.current,
-      style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
+      style: 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json',
       center: [lng, lat],
-      zoom: 12,
+      zoom: 15,
     });
     map.addControl(new maplibregl.NavigationControl(), 'top-right');
 
@@ -111,10 +114,31 @@ export default function CheckoutPage() {
 
   async function fetchLocationName(latitude, longitude) {
     try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
+      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&addressdetails=1`);
       const data = await res.json();
       if (data && data.display_name) {
         setSearchQuery(data.display_name);
+      }
+      if (data && data.address) {
+        const addr = data.address;
+        // Auto-fill street address (road + house number + neighbourhood)
+        const streetParts = [addr.house_number, addr.road, addr.neighbourhood, addr.suburb].filter(Boolean);
+        if (streetParts.length > 0 && !address.trim()) {
+          setAddress(streetParts.join(', '));
+        }
+        // Auto-fill city
+        const cityName = addr.city || addr.town || addr.village || addr.county || addr.state_district;
+        if (cityName && !city.trim()) {
+          setCity(cityName);
+        }
+        // Auto-fill state
+        if (addr.state && !state.trim()) {
+          setState(addr.state);
+        }
+        // Auto-fill PIN code
+        if (addr.postcode && !pincode.trim()) {
+          setPincode(addr.postcode);
+        }
       }
     } catch (err) {
       console.error("Reverse geocoding failed", err);
@@ -157,6 +181,7 @@ export default function CheckoutPage() {
       mapRef.current.flyTo({ center: [newLng, newLat], zoom: 15, duration: 1500 });
       markerRef.current.setLngLat([newLng, newLat]);
     }
+    fetchLocationName(newLat, newLng);
   }
 
   // ── Quote calculation ───────────────────────────────────────

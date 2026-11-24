@@ -991,8 +991,8 @@ function buildRoutingContext(shipmentRow, allWarehouses) {
       distanceKm: parseFloat(shipmentRow.distance_km),
       boxSize: shipmentRow.box_size,
       costBreakdown: {
-        distanceCost: Math.round(parseFloat(shipmentRow.distance_km) * 0.5 * 100) / 100,
-        packagingCost: { SMALL: 1, MEDIUM: 3, LARGE: 7 }[shipmentRow.box_size] || 0,
+        distanceCost: Math.round(parseFloat(shipmentRow.distance_km) * 0.75 * 100) / 100,
+        packagingCost: { SMALL: 10, MEDIUM: 30, LARGE: 50 }[shipmentRow.box_size] || 0,
         depletionPenalty: 0,
       },
       totalCost: parseFloat(shipmentRow.total_cost),

@@ -37,7 +37,7 @@ export default function CustomerOrderTrack() {
     if (!mapRef.current) {
       mapRef.current = new maplibregl.Map({
         container: mapContainerRef.current,
-        style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
+        style: 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json',
         center: [order.customerLng, order.customerLat],
         zoom: 4,
         interactive: true,
