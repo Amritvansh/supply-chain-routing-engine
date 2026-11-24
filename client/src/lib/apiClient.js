@@ -111,8 +111,8 @@ export function getOrder(id) {
  * May return a Gemini-generated or fallback_template explanation.
  * @param {string} id - order UUID
  */
-export function getExplanation(id) {
-  return request(`/orders/${id}/explain`);
+export function getExplanation(id, refresh = false) {
+  return request(`/orders/${id}/explain${refresh ? '?refresh=true' : ''}`);
 }
 
 /**
@@ -328,6 +328,31 @@ export function trackOrder(id) {
   return request(`/orders/track/${id}`);
 }
 
+/**
+ * Cancel an active customer order.
+ * @param {string} id - order UUID
+ * @param {string} reason - cancellation reason
+ */
+export function cancelOrder(id, reason) {
+  return request(`/orders/${id}/cancel`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  });
+}
+
+/**
+ * Request return and refund for a delivered order.
+ * @param {string} id - order UUID
+ * @param {string} reason - return reason
+ * @param {string} refundMethod - 'Original Payment Source' | 'Store Credit'
+ */
+export function returnOrder(id, reason, refundMethod) {
+  return request(`/orders/${id}/return`, {
+    method: 'POST',
+    body: JSON.stringify({ reason, refundMethod }),
+  });
+}
+
 // ─── Host Inventory Management API Methods ─────────────────
 
 /**
@@ -367,5 +392,30 @@ export function getAllOrders() {
  */
 export function getHostOrderDetail(id) {
   return request(`/orders/host/${id}`);
+}
+
+/**
+ * Simulate a warehouse outage (What-If Analysis).
+ * Returns re-routing analysis for affected orders.
+ * Requires Host JWT. ZERO database writes — pure simulation.
+ * @param {string} warehouseId - warehouse UUID to simulate as offline
+ */
+export function simulateOutage(warehouseId) {
+  return request('/dashboard/simulate-outage', {
+    method: 'POST',
+    body: JSON.stringify({ warehouseId }),
+  });
+}
+
+/**
+ * Translate an array of UI strings to a target Indian language via Gemini.
+ * @param {string[]} texts
+ * @param {string} targetLang - 'hi' | 'ta' | 'te' | 'mr' | 'bn' | 'gu' | 'kn' | 'en'
+ */
+export function translateTexts(texts, targetLang) {
+  return request('/translate', {
+    method: 'POST',
+    body: JSON.stringify({ texts, targetLang }),
+  });
 }
 

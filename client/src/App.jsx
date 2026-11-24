@@ -25,6 +25,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
 import { AuthProvider } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
+import { LanguageProvider } from './context/LanguageContext';
 import { HostRoute, CustomerRoute } from './components/ProtectedRoute';
 import EntryPage from './pages/EntryPage';
 import Layout from './layouts/Layout';
@@ -46,9 +47,10 @@ import OrderConfirmation from './pages/OrderConfirmation';
 
 export default function App() {
   return (
-    <AuthProvider>
-      <CartProvider>
-        <BrowserRouter>
+    <LanguageProvider>
+      <AuthProvider>
+        <CartProvider>
+          <BrowserRouter>
           <Routes>
             {/* Public: Entry / Auth page */}
             <Route path="/" element={<EntryPage />} />
@@ -97,5 +99,6 @@ export default function App() {
         </BrowserRouter>
       </CartProvider>
     </AuthProvider>
+    </LanguageProvider>
   );
 }
