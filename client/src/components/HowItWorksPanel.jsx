@@ -14,32 +14,54 @@
 
 /* ── Data ─────────────────────────────────────────────────── */
 const LIFECYCLE = [
-  { n: 1, title: 'Order Submitted', desc: 'Customer selects items and delivery location, then submits checkout.', phase: 'sync', icon: '🛒' },
-  { n: 2, title: 'Warehouse Evaluation', desc: 'Deterministic routing engine checks all active warehouses for available inventory and distance.', phase: 'sync', icon: '🏭' },
-  { n: 3, title: 'Cost Scoring', desc: 'Each warehouse scored: distance cost (km × 0.5) + packaging base cost (box size) + depletion penalty.', phase: 'sync', icon: '📐' },
-  { n: 4, title: 'Bin-Packing', desc: 'Items packed into smallest box (S → M → L). If items exceed one box, order splits across warehouses.', phase: 'sync', icon: '📦' },
-  { n: 5, title: 'Inventory Protection', desc: 'Per-SKU Redis lock prevents overselling. PostgreSQL ACID transaction reserves stock atomically.', phase: 'sync', icon: '🔒' },
-  { n: 6, title: 'Instant Confirmation', desc: 'Routing result, cost breakdown, and shipment details returned. No AI involved. Target: <50ms.', phase: 'sync', icon: '✅' },
-  { n: 7, title: 'AI Explanation', desc: 'Separately, Gemini AI receives routing data and generates a plain-language explanation. Non-blocking.', phase: 'async', icon: '🤖' },
+  { n: 1, title: 'Pre-Checkout ML ETA & Quotation', desc: 'Random Forest ML model predicts exact delivery date, delay risk, and on-time confidence score in real time.', phase: 'sync', icon: '⏱️' },
+  { n: 2, title: 'Inventory & Warehouse Resolution', desc: 'Checks all active warehouses for stock availability, minimum distance, and active dispatch capacity.', phase: 'sync', icon: '🏭' },
+  { n: 3, title: 'Multi-Hub Split Fulfillment', desc: 'If single warehouse lacks complete stock, greedy partition algorithm splits order across optimal hubs minimizing logistics costs.', phase: 'sync', icon: '🔀' },
+  { n: 4, title: 'FFD 3D Bin-Packing Optimization', desc: 'First-Fit Decreasing algorithm assigns items into standard volumetric boxes (Small, Medium, Large) by cm³ volume and weight.', phase: 'sync', icon: '📦' },
+  { n: 5, title: 'Real-Road Highway Routing (OSRM)', desc: 'Computes authentic highway navigation distances and road curvature geometries rather than simple straight-line air distance.', phase: 'sync', icon: '🛣️' },
+  { n: 6, title: 'Distributed Inventory Protection', desc: 'Per-SKU Redis distributed locks (SETNX + Lua compare-and-delete) prevent race conditions and overselling during flash contention.', phase: 'sync', icon: '🔒' },
+  { n: 7, title: 'ACID Checkout & Manifest Generation', desc: 'PostgreSQL atomic transaction decrements inventory, persists routing decisions, and prepares printable shipping manifests.', phase: 'sync', icon: '⚡' },
+  { n: 8, title: 'Instant Order Confirmation & Tax Invoice', desc: 'Customer receives instant order confirmation, printable tax invoice, and live tracking access. Target: <50ms without AI delay.', phase: 'sync', icon: '✅' },
+  { n: 9, title: 'Async AI Explainability & Telemetry', desc: 'Separately and non-blockingly, Google Gemini AI generates natural-language operational audit explanations with circuit breaker fallback.', phase: 'async', icon: '🤖' },
 ];
 
-const SYNC_STEPS = ['Customer order received', 'Routing engine evaluates warehouses', 'Cost function scores options', 'Bin-packing determines packaging', 'Redis lock + PG transaction', 'Instant order confirmation'];
-const ASYNC_STEPS = ['Checkout renders immediately', 'Frontend requests explanation', 'Backend forwards to Gemini', 'AI generates explanation', 'Fallback if Gemini unavailable', 'Explanation displayed to user'];
+const SYNC_STEPS = [
+  'Cart & Pre-checkout ML ETA prediction',
+  'Eligible warehouse stock resolution',
+  'Multi-echelon greedy split partitioning',
+  'First-Fit Decreasing (FFD) 3D packaging',
+  'OSRM highway navigation & road distance',
+  'Per-SKU Redis lock + PostgreSQL ACID commit',
+  'Instant order confirmation & tax invoice',
+];
+
+const ASYNC_STEPS = [
+  'Order renders immediately (<50ms)',
+  'Frontend requests AI explainability',
+  'Backend forwards routing metrics to Gemini',
+  'AI generates natural-language audit rationale',
+  'Automatic fallback if AI is slow or offline',
+  'Live animated truck simulation on Control Tower map',
+];
 
 const TECH = [
-  { layer: 'Frontend', name: 'React 19 + Vite', icon: '⚛️', desc: 'Component-driven SPA with hot reload' },
-  { layer: 'API Server', name: 'Node.js + Express', icon: '🟢', desc: 'RESTful endpoints, middleware chain' },
+  { layer: 'Frontend', name: 'React 19 + Vite', icon: '⚛️', desc: 'Enterprise component SPA, dark/light theme' },
+  { layer: 'API Server', name: 'Node.js + Express', icon: '🟢', desc: 'RESTful endpoints, idempotency, rate limiting' },
   { layer: 'Database', name: 'PostgreSQL', icon: '🐘', desc: 'ACID transactions, relational integrity' },
-  { layer: 'Cache / Locks', name: 'Redis', icon: '⚡', desc: 'Per-SKU distributed locks, rate limiting' },
-  { layer: 'AI Engine', name: 'Gemini API', icon: '🤖', desc: 'Async explanation generation, fallback' },
-  { layer: 'Mapping', name: 'MapLibre GL', icon: '🗺️', desc: 'Route visualization, warehouse markers' },
+  { layer: 'Cache & Locks', name: 'Redis', icon: '⚡', desc: 'Per-SKU distributed locks, Lua compare-delete' },
+  { layer: 'ML Prediction', name: 'Random Forest', icon: '🧠', desc: 'Predictive ETA, on-time score, delay risk' },
+  { layer: 'AI Explainability', name: 'Gemini 1.5 Flash', icon: '🤖', desc: 'Async natural-language reasoning & fallback' },
+  { layer: 'Highway Routing', name: 'OSRM Engine', icon: '🛣️', desc: 'Real highway network distance & geometries' },
+  { layer: 'Interactive Maps', name: 'MapLibre GL', icon: '🗺️', desc: 'Live dispatch fleet animation, vector tiles' },
 ];
 
 const GUARANTEES = [
   { value: '<50ms', label: 'Checkout Latency', desc: 'Deterministic routing target', color: 'var(--color-success)' },
   { value: 'ACID', label: 'Transaction Safety', desc: 'PostgreSQL + Redis locks', color: 'var(--color-warning)' },
   { value: '0%', label: 'AI Dependency', desc: 'Checkout never waits for AI', color: 'var(--color-accent)' },
+  { value: '90%+', label: 'ML ETA Confidence', desc: 'Data-driven delivery predictability', color: 'var(--color-success)' },
   { value: 'Per-SKU', label: 'Lock Granularity', desc: 'No coarse warehouse locks', color: 'var(--color-danger)' },
+  { value: '3D FFD', label: 'Bin-Packing', desc: 'Optimized packaging volume', color: 'var(--color-accent)' },
 ];
 
 /* ── Component ────────────────────────────────────────────── */
@@ -70,13 +92,13 @@ export default function HowItWorksPanel() {
       <div className="glass-card" style={{ padding: '20px 24px' }}>
         <div className="section-header-accent" style={{ marginBottom: 20 }}>
           <h3 style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Request Lifecycle</h3>
-          <p style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 2 }}>From customer order to AI explanation — 7 steps</p>
+          <p style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 2 }}>From customer order to AI explanation — 9 steps</p>
         </div>
 
         <div style={{ position: 'relative' }}>
           {LIFECYCLE.map((step, i) => {
             const isLast = i === LIFECYCLE.length - 1;
-            const isBoundary = i === 6;
+            const isBoundary = i === 8;
             const isSync = step.phase === 'sync';
 
             return (
@@ -174,7 +196,7 @@ export default function HowItWorksPanel() {
         <div className="section-header-accent" style={{ marginBottom: 16 }}>
           <h3 style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Technology Stack</h3>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {TECH.map(t => (
             <div key={t.layer} style={{ borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border-subtle)', background: 'var(--color-bg-primary)', padding: '14px 10px', textAlign: 'center', transition: 'border-color 0.2s, transform 0.2s', cursor: 'default' }}
               onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--color-border)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
@@ -193,7 +215,7 @@ export default function HowItWorksPanel() {
         <div className="section-header-accent" style={{ marginBottom: 16 }}>
           <h3 style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Architecture Guarantees</h3>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           {GUARANTEES.map(g => (
             <div key={g.label} style={{ borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border-subtle)', background: 'var(--color-bg-primary)', padding: 14, textAlign: 'center' }}>
               <p style={{ fontSize: 20, fontWeight: 800, color: g.color, letterSpacing: '-0.02em', lineHeight: 1.2 }}>{g.value}</p>

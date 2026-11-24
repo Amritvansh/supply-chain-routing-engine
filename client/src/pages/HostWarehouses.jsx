@@ -454,22 +454,44 @@ export default function HostWarehouses() {
   const totalSKUs = warehouses.reduce((sum, w) => sum + (w.inventory?.length || 0), 0);
 
   return (
-    <div style={{ fontFamily: 'var(--font-sans)' }}>
+    <div style={{ padding: '32px 36px', maxWidth: 1400, margin: '0 auto', fontFamily: 'var(--font-sans)' }}>
 
       {/* ── Header ──────────────────────────────────────────── */}
-      <div style={{ marginBottom: 32 }}>
-        <h1 style={{
-          fontSize: 28, fontWeight: 800, letterSpacing: '-0.03em',
-          color: 'var(--color-text-primary)', margin: 0,
-        }}>
-          <span style={{
-            background: 'var(--color-accent-gradient)',
-            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-          }}>Warehouse</span> Network
-        </h1>
-        <p style={{ color: 'var(--color-text-muted)', fontSize: 13, marginTop: 4 }}>
-          Manage warehouse locations and coordinates
-        </p>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 28, flexWrap: 'wrap', gap: 16, paddingRight: 118 }}>
+        <div>
+          <h1 style={{
+            fontSize: 28, fontWeight: 800, letterSpacing: '-0.03em',
+            color: 'var(--color-text-primary)', margin: 0,
+          }}>
+            <span style={{
+              background: 'var(--color-accent-gradient)',
+              WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+            }}>Warehouse</span> Network
+          </h1>
+          <p style={{ color: 'var(--color-text-muted)', fontSize: 13, marginTop: 4 }}>
+            Manage warehouse locations and coordinates
+          </p>
+        </div>
+        <button
+          onClick={fetchWarehouses}
+          style={{
+            marginTop: -14,
+            padding: '7px 14px',
+            background: 'rgba(59,130,246,0.1)',
+            color: '#60a5fa',
+            border: '1px solid rgba(59,130,246,0.25)',
+            borderRadius: 'var(--radius-sm)',
+            fontSize: 12, fontWeight: 600,
+            fontFamily: 'var(--font-sans)',
+            cursor: 'pointer', transition: 'all 0.15s',
+            display: 'flex', alignItems: 'center', gap: 6,
+          }}
+        >
+          <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182" />
+          </svg>
+          Refresh
+        </button>
       </div>
 
       {/* ── Stats Row ───────────────────────────────────────── */}
@@ -674,9 +696,11 @@ export default function HostWarehouses() {
 
               {/* ID footer */}
               <div style={{
-                padding: '10px 20px', borderTop: '1px solid var(--color-border-subtle)',
-                background: 'rgba(15,22,41,0.3)',
+                padding: '9px 20px', borderTop: '1px solid var(--color-border-subtle)',
+                background: 'var(--color-surface-subtle)',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               }}>
+                <span style={{ fontSize: 10, color: 'var(--color-text-muted)', fontWeight: 500 }}>ID:</span>
                 <code style={{ fontSize: 10, color: 'var(--color-text-muted)', fontFamily: 'monospace' }}>
                   {wh.id}
                 </code>

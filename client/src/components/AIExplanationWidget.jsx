@@ -1,82 +1,101 @@
 /**
- * AIExplanationWidget — Member 3 Week 5: Polished AI explanation experience
+ * AIExplanationWidget — Polished AI Explainability Experience
  *
- * Displays AI-generated or deterministic-fallback explanations for
- * routing decisions. Supports both single and multi-shipment responses.
+ * Displays Gemini AI or deterministic fallback explanations for
+ * routing decisions. Supports single and multi-shipment orders.
  *
- * ARCHITECTURAL NOTE:
- *   This widget is intentionally independently callable — the parent
- *   component decides when to trigger the fetch, preserving the
- *   hybrid architecture's async separation. The checkout result is
- *   never blocked by this widget.
- *
- * Response shapes handled:
- *   Single:  { explanation, source, modelUsed, latencyMs, generatedAt, cached }
- *   Multi:   { explanations: [{ shipmentIndex, shipmentId, warehouseName, explanation, source }],
- *              multiShipment: true, modelUsed, latencyMs, generatedAt, cached }
- *
- * Source badges:
- *   - "gemini"            → "✦ AI Explanation" (accent glow border)
- *   - "fallback_template" → "Computed Summary" (neutral style, not an error)
- *
- * @param {{ orderId: string, autoFetch?: boolean }} props
+ * Uses explicit inline spacing so global CSS reset never collapses padding.
  */
 import { useState, useCallback, useEffect } from 'react';
 import { getExplanation } from '../lib/apiClient';
 
-/** Badge for explanation source. */
 function SourceBadge({ source }) {
   const isGemini = source === 'gemini';
   return (
     <span
-      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider"
       style={{
-        background: isGemini ? 'var(--color-accent-glow)' : 'rgba(100, 116, 139, 0.15)',
-        color: isGemini ? 'var(--color-accent)' : 'var(--color-text-muted)',
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        padding: '4px 12px',
+        borderRadius: 99,
+        fontSize: 11,
+        fontWeight: 700,
+        letterSpacing: '0.04em',
+        textTransform: 'uppercase',
+        background: isGemini
+          ? 'linear-gradient(135deg, rgba(99,102,241,0.22), rgba(168,85,247,0.18))'
+          : 'rgba(100, 116, 139, 0.14)',
+        color: isGemini ? '#818cf8' : 'var(--color-text-muted)',
+        border: isGemini
+          ? '1px solid rgba(129, 140, 248, 0.35)'
+          : '1px solid var(--color-border)',
       }}
     >
-      {isGemini ? '✦ AI Explanation' : '⚙ Computed Summary'}
+      <span>{isGemini ? '✦' : '⚙'}</span>
+      <span>{isGemini ? 'Gemini AI' : 'Computed Summary'}</span>
     </span>
   );
 }
 
-/** Meta info item */
-function MetaItem({ icon, children }) {
+function MetaChip({ icon, label, value }) {
   return (
-    <span className="inline-flex items-center gap-1">
-      <span style={{ fontSize: 10, opacity: 0.7 }}>{icon}</span>
-      {children}
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 5,
+        padding: '4px 10px',
+        borderRadius: 8,
+        fontSize: 11,
+        fontWeight: 500,
+        background: 'var(--color-surface-chip, var(--color-bg-hover))',
+        border: '1px solid var(--color-border-subtle)',
+        color: 'var(--color-text-secondary)',
+      }}
+    >
+      <span style={{ fontSize: 11 }}>{icon}</span>
+      {label && <span style={{ color: 'var(--color-text-muted)' }}>{label}:</span>}
+      <strong style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>{value}</strong>
     </span>
   );
 }
 
-/** Single explanation block (used for both single and per-shipment rendering). */
-function ExplanationBlock({ title, explanation, source, showDivider = false }) {
+function ExplanationBlock({ title, explanation, source, index }) {
+  const isGemini = source === 'gemini';
   return (
-    <div className={showDivider ? 'pt-3 mt-3 border-t border-[var(--color-border)]' : ''}>
+    <div
+      style={{
+        padding: '16px 18px',
+        borderRadius: 12,
+        background: 'var(--color-surface-subtle, var(--color-bg-primary))',
+        border: '1px solid var(--color-border)',
+        borderLeft: `3.5px solid ${isGemini ? '#818cf8' : '#64748b'}`,
+        marginTop: index > 0 ? 12 : 0,
+      }}
+    >
       {title && (
-        <div className="flex items-center justify-between mb-2">
-          <h4 className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
+          <h4 style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
             {title}
           </h4>
           <SourceBadge source={source} />
         </div>
       )}
-      <p className="text-sm text-[var(--color-text-primary)] leading-relaxed">
+      <p style={{ fontSize: 13.5, color: 'var(--color-text-primary)', lineHeight: 1.7, margin: 0 }}>
         {explanation}
       </p>
     </div>
   );
 }
 
-/** Skeleton shimmer for loading state */
 function ExplanationSkeleton() {
   return (
-    <div className="space-y-3">
-      <div className="animate-shimmer" style={{ width: '40%', height: 12, borderRadius: 6 }} />
-      <div className="animate-shimmer" style={{ width: '100%', height: 14, borderRadius: 6 }} />
-      <div className="animate-shimmer" style={{ width: '90%', height: 14, borderRadius: 6 }} />
-      <div className="animate-shimmer" style={{ width: '70%', height: 14, borderRadius: 6 }} />
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '8px 0' }}>
+      <div className="animate-shimmer" style={{ width: '38%', height: 14, borderRadius: 6 }} />
+      <div className="animate-shimmer" style={{ width: '100%', height: 15, borderRadius: 6 }} />
+      <div className="animate-shimmer" style={{ width: '92%', height: 15, borderRadius: 6 }} />
+      <div className="animate-shimmer" style={{ width: '68%', height: 15, borderRadius: 6 }} />
     </div>
   );
 }
@@ -87,14 +106,13 @@ export default function AIExplanationWidget({ orderId, autoFetch = false }) {
   const [errorMsg, setErrorMsg] = useState('');
   const [errorCode, setErrorCode] = useState('');
 
-  /** Fetch explanation from the backend. */
-  const fetchExplanation = useCallback(async () => {
+  const fetchExplanation = useCallback(async (forceRefresh = false) => {
     if (!orderId) return;
     setState('loading');
     setErrorMsg('');
     setErrorCode('');
     try {
-      const result = await getExplanation(orderId);
+      const result = await getExplanation(orderId, forceRefresh);
       setData(result);
       setState('success');
     } catch (err) {
@@ -104,165 +122,213 @@ export default function AIExplanationWidget({ orderId, autoFetch = false }) {
     }
   }, [orderId]);
 
-  // Auto-fetch if requested (e.g., from HostOrderDetails)
   useEffect(() => {
     if (autoFetch && orderId) {
-      fetchExplanation();
+      fetchExplanation(false);
     }
   }, [autoFetch, orderId, fetchExplanation]);
 
-  // ─── Idle State ─────────────────────────────────────────
+  const cardShell = {
+    borderRadius: 14,
+    padding: '20px 22px',
+    background: 'var(--color-bg-card-solid)',
+    border: '1px solid var(--color-border)',
+    boxShadow: 'var(--shadow-card)',
+    fontFamily: 'var(--font-sans)',
+  };
+
   if (state === 'idle') {
     return (
-      <div className="glass-card p-4">
-        <div className="flex items-center gap-2 mb-2">
-          <div className="w-2 h-2 rounded-full bg-[var(--color-text-muted)]" aria-hidden="true" />
-          <h3 className="text-sm font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">
-            AI Explanation
-          </h3>
-        </div>
-        {orderId ? (
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-[var(--color-text-muted)]">
-              Explanation available for order
-            </p>
-            <button
-              onClick={fetchExplanation}
-              className="px-3 py-1.5 rounded-md bg-[var(--color-accent-glow)] text-[var(--color-accent)] text-xs font-semibold hover:bg-[var(--color-accent)] hover:text-[var(--color-bg-primary)] transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:ring-offset-1 focus:ring-offset-[var(--color-bg-card)]"
-              aria-label="Generate routing explanation"
-            >
-              Generate
-            </button>
+      <div style={cardShell}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{
+              width: 34, height: 34, borderRadius: 10,
+              background: 'rgba(129, 140, 248, 0.14)', color: '#818cf8',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16,
+            }}>✦</div>
+            <div>
+              <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-primary)', margin: 0 }}>
+                AI Routing Explanation
+              </h3>
+              <p style={{ fontSize: 12, color: 'var(--color-text-muted)', margin: '2px 0 0' }}>
+                {orderId ? 'Ready to explain deterministic warehouse selection' : 'Awaiting order…'}
+              </p>
+            </div>
           </div>
-        ) : (
-          <p className="text-sm text-[var(--color-text-muted)]">
-            Awaiting order…
-          </p>
+          {orderId && (
+            <button
+              onClick={() => fetchExplanation(false)}
+              style={{
+                padding: '8px 16px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                background: 'var(--color-accent-gradient)', color: '#fff',
+                fontSize: 12, fontWeight: 600,
+              }}
+            >
+              ✦ Generate Explanation
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (state === 'loading') {
+    return (
+      <div style={cardShell} role="status">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{
+              width: 32, height: 32, borderRadius: 9,
+              background: 'rgba(129, 140, 248, 0.14)', color: '#818cf8',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15,
+            }}>✦</div>
+            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-primary)' }}>
+              Generating AI Explanation…
+            </span>
+          </div>
+          <span style={{ fontSize: 11, color: 'var(--color-accent)', fontWeight: 600 }}>Analyzing routes</span>
+        </div>
+        <ExplanationSkeleton />
+      </div>
+    );
+  }
+
+  if (state === 'error') {
+    return (
+      <div style={{ ...cardShell, borderColor: 'rgba(239, 68, 68, 0.45)' }} role="alert">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: '#f87171' }}>⚠ AI Explanation Error</span>
+          <button
+            onClick={() => fetchExplanation(true)}
+            style={{
+              padding: '6px 14px', borderRadius: 8, border: '1px solid rgba(239,68,68,0.4)',
+              background: 'rgba(239,68,68,0.12)', color: '#f87171', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+            }}
+          >
+            ↻ Retry
+          </button>
+        </div>
+        <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: 0 }}>{errorMsg}</p>
+        {errorCode && (
+          <code style={{ display: 'inline-block', marginTop: 8, fontSize: 11, padding: '2px 8px', borderRadius: 6, background: 'var(--color-bg-hover)', color: 'var(--color-text-muted)' }}>
+            {errorCode}
+          </code>
         )}
       </div>
     );
   }
 
-  // ─── Loading State ──────────────────────────────────────
-  if (state === 'loading') {
-    return (
-      <div className="glass-card p-4" role="status">
-        <div className="flex items-center gap-2 mb-3">
-          <div className="w-2 h-2 rounded-full bg-[var(--color-accent)] animate-pulse" aria-hidden="true" />
-          <h3 className="text-sm font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">
-            AI Explanation
-          </h3>
-          <span className="text-[10px] text-[var(--color-text-muted)] font-medium ml-auto">
-            Generating…
-          </span>
-        </div>
-        <ExplanationSkeleton />
-        <span className="sr-only">Loading routing explanation</span>
-      </div>
-    );
-  }
-
-  // ─── Error State ────────────────────────────────────────
-  if (state === 'error') {
-    return (
-      <div className="glass-card p-4" style={{ borderColor: 'var(--color-danger)' }} role="alert">
-        <div className="flex items-center gap-2 mb-2">
-          <div className="w-2 h-2 rounded-full bg-[var(--color-danger)]" aria-hidden="true" />
-          <h3 className="text-sm font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">
-            AI Explanation
-          </h3>
-        </div>
-        <div className="rounded-lg border border-[var(--color-danger)] bg-[var(--color-danger-glow)] p-3 mb-3">
-          <p className="text-sm text-[var(--color-danger)] font-medium">
-            {errorMsg}
-          </p>
-          {errorCode && (
-            <span className="inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-mono text-[var(--color-text-muted)] bg-[var(--color-bg-primary)]">
-              {errorCode}
-            </span>
-          )}
-        </div>
-        <button
-          onClick={fetchExplanation}
-          className="px-3 py-1.5 rounded-md bg-red-500/10 text-[var(--color-danger)] text-xs font-semibold hover:bg-red-500/20 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--color-danger)] focus:ring-offset-1 focus:ring-offset-[var(--color-bg-card)]"
-          aria-label="Retry generating explanation"
-        >
-          Retry
-        </button>
-      </div>
-    );
-  }
-
-  // ─── Success State ──────────────────────────────────────
   const isMultiShipment = data?.multiShipment === true && Array.isArray(data?.explanations);
   const overallSource = data?.source;
   const isGemini = overallSource === 'gemini';
 
   return (
     <div
-      className="glass-card p-4"
       style={{
-        borderColor: isGemini ? 'rgba(99, 102, 241, 0.25)' : undefined,
-        boxShadow: isGemini ? '0 0 30px rgba(99, 102, 241, 0.06)' : undefined,
+        ...cardShell,
+        borderColor: isGemini ? 'rgba(129, 140, 248, 0.35)' : 'var(--color-border)',
+        boxShadow: isGemini ? '0 8px 32px rgba(99, 102, 241, 0.1)' : 'var(--shadow-card)',
       }}
     >
-      {/* Header with overall source badge */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <div
-            className="w-2 h-2 rounded-full"
-            style={{
-              background: isGemini ? 'var(--color-accent)' : 'var(--color-text-muted)',
-              boxShadow: isGemini ? '0 0 8px rgba(99, 102, 241, 0.5)' : 'none',
-            }}
-            aria-hidden="true"
-          />
-          <h3 className="text-sm font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">
-            AI Explanation
-            {isMultiShipment && (
-              <span className="ml-2 text-[10px] font-medium text-[var(--color-text-muted)] normal-case">
-                ({data.explanations.length} shipment{data.explanations.length !== 1 ? 's' : ''})
-              </span>
-            )}
-          </h3>
+      {/* Header */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        gap: 12, flexWrap: 'wrap', paddingBottom: 14, marginBottom: 16,
+        borderBottom: '1px solid var(--color-border-subtle)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{
+            width: 34, height: 34, borderRadius: 10,
+            background: isGemini
+              ? 'linear-gradient(135deg, #6366f1, #8b5cf6)'
+              : 'rgba(100, 116, 139, 0.16)',
+            color: isGemini ? '#ffffff' : 'var(--color-text-muted)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 16, fontWeight: 700,
+            boxShadow: isGemini ? '0 4px 12px rgba(99, 102, 241, 0.3)' : 'none',
+          }}>
+            {isGemini ? '✦' : '⚙'}
+          </div>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-text-primary)', margin: 0 }}>
+                Routing Decision Rationale
+              </h3>
+              {isMultiShipment && (
+                <span style={{
+                  fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99,
+                  background: 'rgba(59, 130, 246, 0.14)', color: '#60a5fa',
+                }}>
+                  {data.explanations.length} Shipments
+                </span>
+              )}
+            </div>
+            <p style={{ fontSize: 11, color: 'var(--color-text-muted)', margin: '2px 0 0' }}>
+              {isGemini
+                ? 'Live natural-language synthesis powered by Google Gemini'
+                : 'Deterministic template summary (fallback mode)'}
+            </p>
+          </div>
         </div>
-        {!isMultiShipment && <SourceBadge source={overallSource} />}
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <SourceBadge source={overallSource} />
+          <button
+            onClick={() => fetchExplanation(true)}
+            title="Regenerate live explanation with Gemini AI"
+            style={{
+              padding: '5px 11px', borderRadius: 8, cursor: 'pointer',
+              border: '1px solid var(--color-border)', background: 'var(--color-bg-hover)',
+              color: 'var(--color-text-secondary)', fontSize: 11, fontWeight: 600,
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+            }}
+          >
+            <span>↻</span>
+            <span>Regenerate</span>
+          </button>
+        </div>
       </div>
 
       {/* Single explanation */}
       {!isMultiShipment && (
-        <p className="text-sm text-[var(--color-text-primary)] leading-relaxed mb-3">
-          {data?.explanation}
-        </p>
+        <ExplanationBlock
+          explanation={data?.explanation}
+          source={overallSource}
+          index={0}
+        />
       )}
 
       {/* Multi-shipment explanations */}
       {isMultiShipment && data.explanations.map((exp, idx) => (
         <ExplanationBlock
           key={exp.shipmentId || idx}
+          index={idx}
           title={`Shipment ${exp.shipmentIndex + 1}${exp.warehouseName ? ` — ${exp.warehouseName}` : ''}`}
           explanation={exp.explanation}
           source={exp.source}
-          showDivider={idx > 0}
         />
       ))}
 
-      {/* Meta info */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-[var(--color-text-muted)] border-t border-[var(--color-border)] pt-2 mt-3">
+      {/* Meta Chips Footer */}
+      <div style={{
+        display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8,
+        marginTop: 16, paddingTop: 14,
+        borderTop: '1px solid var(--color-border-subtle)',
+      }}>
         {data?.modelUsed && data.modelUsed !== 'n/a' && (
-          <MetaItem icon="🧠">Model: {data.modelUsed}</MetaItem>
+          <MetaChip icon="🧠" label="Model" value={data.modelUsed} />
         )}
         {data?.latencyMs != null && (
-          <MetaItem icon="⚡">{data.latencyMs}ms</MetaItem>
+          <MetaChip icon="⚡" label="Latency" value={`${data.latencyMs}ms`} />
         )}
         {data?.generatedAt && (
-          <MetaItem icon="🕐">{new Date(data.generatedAt).toLocaleString()}</MetaItem>
+          <MetaChip icon="🕐" value={new Date(data.generatedAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })} />
         )}
-        {data?.cached && (
-          <span className="px-1.5 py-0.5 rounded bg-[var(--color-bg-hover)] text-[var(--color-text-muted)] flex items-center gap-1">
-            <span style={{ fontSize: 10 }}>💾</span> cached
-          </span>
-        )}
+        <MetaChip
+          icon={data?.cached ? '💾' : '✨'}
+          value={data?.cached ? 'Cached' : 'Freshly Generated'}
+        />
       </div>
     </div>
   );

@@ -24,6 +24,8 @@ import {
   LineChart, Line, PieChart, Pie, Cell, Legend,
 } from 'recharts';
 import * as api from '../lib/apiClient';
+import { useLanguage } from '../context/LanguageContext';
+import { SUPPORTED_LANGUAGES, FLASH_SALE_I18N } from '../lib/translations';
 
 /* ── Theme constants ──────────────────────────────────────── */
 const C = {
@@ -145,6 +147,10 @@ export default function Analytics() {
   const [aiLoading, setAiLoading] = useState(true);
   const [aiError, setAiError] = useState(null);
 
+  const { lang, setLang } = useLanguage();
+  const [showFlashGuide, setShowFlashGuide] = useState(true);
+  const flashCopy = FLASH_SALE_I18N[lang] || FLASH_SALE_I18N.en;
+
   const [skus, setSkus] = useState([]);
   const [flashSku, setFlashSku] = useState('');
   const [flashQty, setFlashQty] = useState(1);
@@ -206,7 +212,9 @@ export default function Analytics() {
   };
 
   /* ── Derived data ─────────────────────────────────────── */
-  const routes = mapData?.routes || [];
+  const allRoutes = mapData?.routes || [];
+  const routes = allRoutes.filter(r => !['CANCELLED', 'RETURN_REQUESTED'].includes(r.status));
+  const cancelledCount = allRoutes.length - routes.length;
   const totalOrders = routes.length;
   const splitOrders = routes.filter(r => (r.shipments || []).length > 1).length;
 
@@ -282,16 +290,38 @@ export default function Analytics() {
 
   /* ══ Render ═════════════════════════════════════════════ */
   return (
-    <div className="animate-fade-in">
+    <div className="animate-fade-in" style={{ padding: '32px 36px', maxWidth: 1400, margin: '0 auto' }}>
       {/* Header */}
-      <div style={{ marginBottom: 28 }}>
-        <h1 className="page-title" style={{ marginBottom: 6 }}>Analytics</h1>
-        <p className="page-subtitle">Routing performance metrics and operational insights — real order data</p>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 28, flexWrap: 'wrap', gap: 16, paddingRight: 118 }}>
+        <div>
+          <h1 className="page-title" style={{ marginBottom: 6 }}>Analytics</h1>
+          <p className="page-subtitle">Routing performance metrics and operational insights — real order data</p>
+        </div>
+        <button
+          onClick={() => { fetchMap(); fetchWh(); fetchAi(); }}
+          style={{
+            marginTop: -14,
+            padding: '7px 14px',
+            background: 'rgba(59,130,246,0.1)',
+            color: '#60a5fa',
+            border: '1px solid rgba(59,130,246,0.25)',
+            borderRadius: 'var(--radius-sm)',
+            fontSize: 12, fontWeight: 600,
+            fontFamily: 'var(--font-sans)',
+            cursor: 'pointer', transition: 'all 0.15s',
+            display: 'flex', alignItems: 'center', gap: 6,
+          }}
+        >
+          <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182" />
+          </svg>
+          Refresh
+        </button>
       </div>
 
       {/* KPI Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" style={{ marginBottom: 24 }}>
-        <KpiCard icon={<OrdersIcon />} label="Total Orders" value={totalOrders} sub={totalOrders > 0 ? `${splitOrders} split shipment${splitOrders !== 1 ? 's' : ''}` : undefined} color="var(--color-accent)" loading={kpiLoading} />
+        <KpiCard icon={<OrdersIcon />} label="Active Orders" value={totalOrders} sub={totalOrders > 0 || cancelledCount > 0 ? `${splitOrders} split${cancelledCount > 0 ? ` · ${cancelledCount} cancelled` : ''}` : undefined} color="var(--color-accent)" loading={kpiLoading} />
         <KpiCard icon={<CostIcon />} label="Avg Routing Cost" value={avgCost > 0 ? `₹${avgCost.toFixed(2)}` : '—'} sub={routes.length > 0 ? `across ${routes.length} order${routes.length !== 1 ? 's' : ''}` : undefined} color="var(--color-success)" loading={kpiLoading} />
         <KpiCard icon={<WarehouseIcon />} label="Active Warehouses" value={activeWh} sub={warehouseData ? `${warehouseData.length} total registered` : undefined} color="var(--color-accent)" loading={kpiLoading} />
         <KpiCard icon={<AlertIcon />} label="Low Stock Alerts" value={lowStockWh} sub={lowStockWh > 0 ? `≤${LOW_STOCK} units on ≥1 SKU` : 'All warehouses healthy'} color={lowStockWh > 0 ? 'var(--color-warning)' : 'var(--color-success)'} loading={kpiLoading} />
@@ -421,14 +451,123 @@ export default function Analytics() {
                     <Stat label="Avg" value={flashResult.avgLatencyMs?.toFixed(0)} unit="ms" color={C.accent} />
                     <Stat label="P95" value={flashResult.p95LatencyMs?.toFixed(0)} unit="ms" color={C.purple} />
                   </div>
+                  {/* Dynamic Host Action Verdict */}
+                  <div
+                    data-no-translate="true"
+                    style={{
+                      padding: '10px 12px',
+                      borderRadius: 10,
+                      fontSize: 11.5,
+                      lineHeight: 1.5,
+                      fontWeight: 500,
+                      border: flashResult.conflict409Count > 0
+                        ? '1px solid rgba(248, 113, 113, 0.4)'
+                        : flashResult.rateLimited429Count > 0
+                          ? '1px solid rgba(251, 191, 36, 0.4)'
+                          : '1px solid rgba(52, 211, 153, 0.4)',
+                      background: flashResult.conflict409Count > 0
+                        ? 'rgba(248, 113, 113, 0.1)'
+                        : flashResult.rateLimited429Count > 0
+                          ? 'rgba(251, 191, 36, 0.1)'
+                          : 'rgba(52, 211, 153, 0.1)',
+                      color: 'var(--color-text-primary)',
+                    }}
+                  >
+                    {flashResult.conflict409Count > 0
+                      ? `🚨 ${flashCopy.verdictConflict(flashResult.conflict409Count, flashSku)}`
+                      : flashResult.rateLimited429Count > 0
+                        ? `🛡️ ${flashCopy.verdictRateLimited(flashResult.successCount, flashResult.rateLimited429Count)}`
+                        : `✅ ${flashCopy.verdictHealthy(flashResult.successCount, flashResult.p95LatencyMs?.toFixed(0) || 0)}`}
+                  </div>
                   <p style={{ fontSize: 10, color: C.muted, textAlign: 'center' }}>Real ACID checkout path — no simulated data</p>
                 </div>
               );
             })() : flashState === 'idle' && (
-              <div style={{ borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border-subtle)', background: 'var(--color-bg-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '28px 0' }}>
-                <p style={{ fontSize: 11, color: C.muted }}>Run a flash-sale test to see contention metrics</p>
+              <div style={{ borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border-subtle)', background: 'var(--color-bg-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '18px 14px', textAlign: 'center' }}>
+                <p style={{ fontSize: 11, color: C.muted, margin: 0 }}>Run a flash-sale test to see live contention metrics & Host action verdict</p>
               </div>
             )}
+
+            {/* Multi-Language Host Guide & Metric Meanings inside Flash-Sale Card */}
+            <div
+              data-no-translate="true"
+              style={{
+                borderRadius: 12,
+                padding: '12px 14px',
+                background: 'var(--color-surface-subtle, var(--color-bg-primary))',
+                border: '1px solid var(--color-border)',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: showFlashGuide ? 10 : 0 }}>
+                <button
+                  type="button"
+                  onClick={() => setShowFlashGuide(prev => !prev)}
+                  style={{
+                    background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    fontSize: 11.5, fontWeight: 700, color: 'var(--color-text-primary)',
+                  }}
+                >
+                  <span>📖</span>
+                  <span>{flashCopy.guideTitle}</span>
+                  <span style={{ fontSize: 10, color: C.muted }}>{showFlashGuide ? '▲' : '▼'}</span>
+                </button>
+
+                {/* Instant 8-Language Switcher inside Flash-Sale card */}
+                <select
+                  value={lang}
+                  onChange={e => setLang(e.target.value)}
+                  aria-label="Choose guide & website language"
+                  style={{
+                    padding: '4px 8px',
+                    borderRadius: 7,
+                    background: 'var(--color-bg-input)',
+                    border: '1px solid var(--color-border)',
+                    color: 'var(--color-text-primary)',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {SUPPORTED_LANGUAGES.map(l => (
+                    <option key={l.code} value={l.code}>{l.native} ({l.name})</option>
+                  ))}
+                </select>
+              </div>
+
+              {showFlashGuide && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 8, borderTop: '1px solid var(--color-border-subtle)' }}>
+                  <div>
+                    <p style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: C.accent, margin: '0 0 5px' }}>
+                      {flashCopy.howToUseTitle}
+                    </p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                      {flashCopy.steps.map((s, idx) => (
+                        <p key={idx} style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: 0, lineHeight: 1.45 }}>
+                          {s}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: C.success, margin: '0 0 5px' }}>
+                      {flashCopy.metricsTitle}
+                    </p>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 5 }}>
+                      {flashCopy.metrics.map((m) => (
+                        <div key={m.key} style={{
+                          padding: '6px 9px', borderRadius: 7,
+                          background: 'var(--color-bg-hover)', fontSize: 11, lineHeight: 1.4,
+                        }}>
+                          <strong style={{ color: 'var(--color-text-primary)' }}>{m.key}:</strong>{' '}
+                          <span style={{ color: 'var(--color-text-secondary)' }}>{m.desc}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </Section>
 

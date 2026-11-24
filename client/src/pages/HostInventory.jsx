@@ -297,7 +297,7 @@ export default function HostInventory() {
       {toast && <Toast {...toast} onClose={() => setToast(null)} />}
 
       {/* ── Header ─────────────────────────────────────────── */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28, flexWrap: 'wrap', gap: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28, flexWrap: 'wrap', gap: 16, paddingRight: 118 }}>
         <div>
           <h1 style={{ fontSize: 26, fontWeight: 700, color: 'var(--color-text-primary)', margin: 0, fontFamily: 'var(--font-sans)' }}>
             Inventory Management
@@ -306,22 +306,43 @@ export default function HostInventory() {
             Manage stock levels across all warehouses
           </p>
         </div>
-        <button
-          style={S.btnPrimary}
-          onClick={() => {
-            setForm({ sku: '', warehouse_id: '', quantity: '' });
-            setShowModal(true);
-          }}
-          onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 4px 20px rgba(59,130,246,0.3)'; }}
-          onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none'; }}
-        >
-          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: -12 }}>
+          <button
+            onClick={fetchData}
+            style={{
+              padding: '8px 14px',
+              background: 'rgba(59,130,246,0.1)',
+              color: '#60a5fa',
+              border: '1px solid rgba(59,130,246,0.25)',
+              borderRadius: 'var(--radius-sm)',
+              fontSize: 12, fontWeight: 600,
+              fontFamily: 'var(--font-sans)',
+              cursor: 'pointer', transition: 'all 0.15s',
+              display: 'flex', alignItems: 'center', gap: 6,
+            }}
+          >
+            <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182" />
             </svg>
-            Adjust Stock
-          </span>
-        </button>
+            Refresh
+          </button>
+          <button
+            style={S.btnPrimary}
+            onClick={() => {
+              setForm({ sku: '', warehouse_id: '', quantity: '' });
+              setShowModal(true);
+            }}
+            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 4px 20px rgba(59,130,246,0.3)'; }}
+            onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none'; }}
+          >
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+              </svg>
+              Adjust Stock
+            </span>
+          </button>
+        </div>
       </div>
 
       {/* ── Summary Cards ──────────────────────────────────── */}

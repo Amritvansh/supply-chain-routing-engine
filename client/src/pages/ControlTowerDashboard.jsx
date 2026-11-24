@@ -14,6 +14,7 @@
  *   - GET /api/v1/dashboard/stats     → aggregated KPI stats for cards
  */
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import maplibregl from 'maplibre-gl';
 import * as api from '../lib/apiClient';
 import OSM_STYLE from '../lib/mapStyles';
@@ -121,16 +122,58 @@ function KpiCard({ icon, label, value, accentColor, onClick, isActive, loading }
   );
 }
 
-function MapLegend() {
+function MapLegend({ outageActive }) {
+  const [collapsed, setCollapsed] = useState(false);
+
+  if (collapsed) {
+    return (
+      <button
+        onClick={() => setCollapsed(false)}
+        className="absolute bottom-5 left-5 z-10 glass-card px-3.5 py-2 flex items-center gap-2 transition-all cursor-pointer shadow-lg"
+        style={{
+          borderRadius: 9999,
+          background: 'var(--color-bg-card-solid)',
+          border: '1px solid var(--color-border)',
+        }}
+        title="Open Map Legend"
+        aria-label="Expand Map Legend"
+      >
+        <span className="text-sm">🗺️</span>
+        <span className="text-xs font-semibold text-[var(--color-text-primary)]">Legend</span>
+        <span className="text-[10px] text-[var(--color-text-muted)]">▲</span>
+      </button>
+    );
+  }
+
   return (
     <div
-      className="absolute bottom-6 left-4 z-10 glass-card p-3"
+      className="absolute bottom-5 left-5 z-10 glass-card p-3.5 shadow-xl animate-fade-in"
+      style={{
+        width: 250,
+        borderRadius: 14,
+        background: 'var(--color-bg-card-solid)',
+        border: '1px solid var(--color-border)',
+        boxShadow: '0 10px 25px -5px rgba(0,0,0,0.18)',
+      }}
       role="region"
       aria-label="Map legend"
     >
-      <h4 className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-2">
-        Map Legend
-      </h4>
+      <div className="flex items-center justify-between mb-2 pb-1.5 border-b border-[var(--color-border-subtle)]">
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs">🗺️</span>
+          <h4 className="text-xs font-bold text-[var(--color-text-primary)] uppercase tracking-wider">
+            Map Legend
+          </h4>
+        </div>
+        <button
+          onClick={() => setCollapsed(true)}
+          className="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] px-1.5 py-0.5 rounded hover:bg-[var(--color-bg-hover)] transition-colors cursor-pointer"
+          title="Minimize Legend"
+          aria-label="Minimize Map Legend"
+        >
+          ✕
+        </button>
+      </div>
       <div className="space-y-1.5">
         <div className="flex items-center gap-2">
           <span
@@ -144,7 +187,7 @@ function MapLegend() {
           >
             ✓
           </span>
-          <span className="text-xs text-[var(--color-text-secondary)]">Healthy Stock</span>
+          <span className="text-xs font-medium text-[var(--color-text-secondary)]">Healthy Stock</span>
         </div>
         <div className="flex items-center gap-2">
           <span
@@ -158,8 +201,34 @@ function MapLegend() {
           >
             ▼
           </span>
-          <span className="text-xs text-[var(--color-text-secondary)]">Low Stock (≤ {LOW_STOCK_THRESHOLD} units)</span>
+          <span className="text-xs font-medium text-[var(--color-text-secondary)]">Low Stock (≤ {LOW_STOCK_THRESHOLD} units)</span>
         </div>
+        {outageActive && (
+          <>
+            <div className="flex items-center gap-2">
+              <span
+                className="w-4 h-4 rounded-full border-2 flex items-center justify-center text-[8px] font-bold shrink-0"
+                style={{
+                  borderColor: '#ef4444',
+                  background: 'rgba(239,68,68,0.25)',
+                  color: '#ef4444',
+                }}
+                aria-hidden="true"
+              >
+                🚨
+              </span>
+              <span className="text-xs font-semibold text-red-400">Simulated Outage Hub</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span
+                className="w-3.5 h-1.5 rounded-full shrink-0"
+                style={{ background: '#f59e0b' }}
+                aria-hidden="true"
+              />
+              <span className="text-xs font-semibold text-amber-400">Failover Backup Route</span>
+            </div>
+          </>
+        )}
         <div className="flex items-center gap-2">
           <span
             className="w-4 h-4 rounded-full border-2 shrink-0"
@@ -169,24 +238,26 @@ function MapLegend() {
             }}
             aria-hidden="true"
           />
-          <span className="text-xs text-[var(--color-text-secondary)]">Customer Location</span>
+          <span className="text-xs font-medium text-[var(--color-text-secondary)]">Customer Location</span>
         </div>
         {/* Split-shipment route color legend */}
-        <div className="pt-1 border-t border-[var(--color-border-subtle)] mt-1">
+        <div className="pt-1.5 border-t border-[var(--color-border-subtle)] mt-1.5">
           <span className="text-[10px] text-[var(--color-text-muted)] uppercase tracking-wider font-semibold">Shipment Routes</span>
         </div>
-        {ROUTE_COLORS.slice(0, 4).map((color, idx) => (
-          <div key={idx} className="flex items-center gap-2">
-            <span
-              className="w-4 h-1 rounded shrink-0"
-              style={{ background: color }}
-              aria-hidden="true"
-            />
-            <span className="text-xs text-[var(--color-text-secondary)]">
-              {idx === 0 ? 'Shipment 1 / Single' : `Shipment ${idx + 1}`}
-            </span>
-          </div>
-        ))}
+        <div className="grid grid-cols-2 gap-x-2 gap-y-1 mt-1">
+          {ROUTE_COLORS.slice(0, 4).map((color, idx) => (
+            <div key={idx} className="flex items-center gap-1.5">
+              <span
+                className="w-3.5 h-1.5 rounded-full shrink-0"
+                style={{ background: color }}
+                aria-hidden="true"
+              />
+              <span className="text-[11px] font-medium text-[var(--color-text-secondary)] truncate">
+                {idx === 0 ? 'Single/1st' : `Route ${idx + 1}`}
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -376,10 +447,22 @@ function isLowStock(warehouse) {
 }
 
 /** Build the HTML content for a warehouse popup. */
-function buildPopupHTML(warehouse) {
+function buildPopupHTML(warehouse, isOutageDown = false, isFailoverHub = false) {
   const stockStatus = isLowStock(warehouse);
-  const statusLabel = stockStatus ? 'Low Stock' : 'Healthy';
-  const statusColor = stockStatus ? 'var(--color-warning)' : 'var(--color-success)';
+  const statusLabel = isOutageDown
+    ? '🚨 OUTAGE / OFFLINE (Simulated)'
+    : isFailoverHub
+      ? '⚡ Active Failover Backup Hub'
+      : stockStatus
+        ? 'Low Stock'
+        : 'Healthy';
+  const statusColor = isOutageDown
+    ? '#ef4444'
+    : isFailoverHub
+      ? '#38bdf8'
+      : stockStatus
+        ? 'var(--color-warning)'
+        : 'var(--color-success)';
 
   // Handle both warehouse formats (getWarehouses vs getMapData)
   const hasInventory = warehouse.inventory && warehouse.inventory.length > 0;
@@ -484,9 +567,13 @@ function buildCustomerPopupHTML(route) {
 // ─── Main Component ─────────────────────────────────────────
 
 export default function ControlTowerDashboard() {
+  const navigate = useNavigate();
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
   const markersRef = useRef([]);
+  const truckMarkersRef = useRef([]);
+  const animFrameRef = useRef(null);
+  const [truckSimEnabled, setTruckSimEnabled] = useState(true);
 
   const [warehouses, setWarehouses] = useState([]);
   const [routes, setRoutes] = useState([]);
@@ -496,6 +583,54 @@ export default function ControlTowerDashboard() {
   const [highlightLowStock, setHighlightLowStock] = useState(false);
   const [stats, setStats] = useState(null);
   const [statsLoading, setStatsLoading] = useState(true);
+
+  // What-If Warehouse Outage Simulator state (100% read-only simulation)
+  const [outageMenuOpen, setOutageMenuOpen] = useState(false);
+  const [outageLoading, setOutageLoading] = useState(false);
+  const [outageError, setOutageError] = useState(null);
+  const [outageSim, setOutageSim] = useState(null);
+  const [outageModalOpen, setOutageModalOpen] = useState(false);
+  const outageMenuRef = useRef(null);
+  const hasFittedBoundsRef = useRef(false);
+  const routesRef = useRef([]);
+  routesRef.current = routes;
+
+  // Close outage dropdown on outside click
+  useEffect(() => {
+    function handleOutsideClick(e) {
+      if (outageMenuRef.current && !outageMenuRef.current.contains(e.target)) {
+        setOutageMenuOpen(false);
+      }
+    }
+    if (outageMenuOpen) {
+      document.addEventListener('mousedown', handleOutsideClick);
+      return () => document.removeEventListener('mousedown', handleOutsideClick);
+    }
+  }, [outageMenuOpen]);
+
+  /** Trigger read-only outage simulation for a given warehouse */
+  async function handleSimulateOutage(warehouseId) {
+    setOutageMenuOpen(false);
+    setOutageLoading(true);
+    setOutageError(null);
+    setSelectedRoute(null);
+    try {
+      const result = await api.simulateOutage(warehouseId);
+      setOutageSim(result);
+      setOutageModalOpen(true);
+    } catch (err) {
+      setOutageError(err.message || 'Failed to simulate warehouse outage.');
+    } finally {
+      setOutageLoading(false);
+    }
+  }
+
+  /** Restore all warehouses back to normal state */
+  function handleRestoreAllHubs() {
+    setOutageModalOpen(false);
+    setOutageSim(null);
+    setOutageError(null);
+  }
 
   /** Fetch warehouse data (detailed inventory), map data (routes), and KPI stats. */
   const fetchData = useCallback(async () => {
@@ -555,8 +690,9 @@ export default function ControlTowerDashboard() {
       markersRef.current.forEach((m) => m.remove());
       markersRef.current = [];
       removeRouteLayers(mapRef.current);
-      addMarkers(mapRef.current, warehouses);
-      addRoutes(mapRef.current, routes);
+      addMarkers(mapRef.current, warehouses, outageSim);
+      addRoutes(mapRef.current, routes, outageSim);
+      setTimeout(() => mapRef.current?.resize(), 60);
       return;
     }
 
@@ -575,11 +711,12 @@ export default function ControlTowerDashboard() {
     map.addControl(new maplibregl.NavigationControl(), 'top-right');
 
     map.on('load', () => {
-      addMarkers(map, warehouses);
-      addRoutes(map, routes);
+      addMarkers(map, warehouses, outageSim);
+      addRoutes(map, routes, outageSim);
 
       // Add route click handler for all route layers
       map.on('click', (e) => {
+        const currentRoutes = routesRef.current || [];
         const features = map.queryRenderedFeatures(e.point, {
           layers: map.getStyle().layers
             .filter((l) => l.id.startsWith('route-') && l.id.endsWith('-line'))
@@ -591,8 +728,8 @@ export default function ControlTowerDashboard() {
           const match = layerId.match(/route-(\d+)-/);
           if (match) {
             const routeIdx = parseInt(match[1], 10);
-            if (routes[routeIdx]) {
-              setSelectedRoute(routes[routeIdx]);
+            if (currentRoutes[routeIdx]) {
+              setSelectedRoute(currentRoutes[routeIdx]);
             }
           }
         }
@@ -616,33 +753,75 @@ export default function ControlTowerDashboard() {
     mapRef.current = map;
 
     return () => {
+      if (animFrameRef.current) {
+        cancelAnimationFrame(animFrameRef.current);
+        animFrameRef.current = null;
+      }
+      truckMarkersRef.current.forEach((m) => m.remove());
+      truckMarkersRef.current = [];
       markersRef.current.forEach((m) => m.remove());
       markersRef.current = [];
+      hasFittedBoundsRef.current = false;
       map.remove();
       mapRef.current = null;
     };
-  // We intentionally depend on warehouses/routes as data input
+  // We intentionally depend on warehouses/routes/outageSim as data input
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [warehouses, routes, loading, error]);
+  }, [warehouses, routes, loading, error, outageSim]);
+
+  // Resize map whenever outage drawer toggles
+  useEffect(() => {
+    const t = setTimeout(() => {
+      mapRef.current?.resize();
+    }, 80);
+    return () => clearTimeout(t);
+  }, [outageSim]);
+
+  // Toggle truck marker visibility when simulation switch is pressed
+  useEffect(() => {
+    truckMarkersRef.current.forEach((m) => {
+      const el = m.getElement();
+      if (el) el.style.display = truckSimEnabled ? 'flex' : 'none';
+    });
+  }, [truckSimEnabled]);
 
   /** Add warehouse markers to the map. */
-  function addMarkers(map, warehouseList) {
+  function addMarkers(map, warehouseList, activeOutage = null) {
+    const failedWhId = activeOutage?.disabledWarehouse?.id;
+    const failoverIds = new Set(
+      (activeOutage?.affectedOrders || [])
+        .filter((o) => o.canReroute && o.newWarehouseId)
+        .map((o) => o.newWarehouseId)
+    );
+
     warehouseList.forEach((wh) => {
       const lowStock = isLowStock(wh);
+      const isOutageDown = failedWhId === wh.id;
+      const isFailoverHub = !isOutageDown && failoverIds.has(wh.id);
 
       // Create custom marker element
       const el = document.createElement('button');
-      el.className = `warehouse-marker ${lowStock ? 'warehouse-marker--low-stock' : 'warehouse-marker--healthy'}`;
-      el.setAttribute('aria-label', `${wh.name} — ${lowStock ? 'Low Stock' : 'Healthy Stock'}`);
+      if (isOutageDown) {
+        el.className = 'warehouse-marker warehouse-marker--outage';
+        el.setAttribute('aria-label', `${wh.name} — Simulated Outage / Offline`);
+        el.textContent = '🚨';
+      } else if (isFailoverHub) {
+        el.className = 'warehouse-marker warehouse-marker--failover';
+        el.setAttribute('aria-label', `${wh.name} — Active Failover Backup Hub`);
+        el.textContent = '⚡';
+      } else {
+        el.className = `warehouse-marker ${lowStock ? 'warehouse-marker--low-stock' : 'warehouse-marker--healthy'}`;
+        el.setAttribute('aria-label', `${wh.name} — ${lowStock ? 'Low Stock' : 'Healthy Stock'}`);
+        el.textContent = lowStock ? '▼' : '✓';
+      }
       el.setAttribute('tabindex', '0');
-      el.textContent = lowStock ? '▼' : '✓';
 
       const popup = new maplibregl.Popup({
         offset: 20,
         closeButton: true,
         closeOnClick: true,
         maxWidth: '320px',
-      }).setHTML(buildPopupHTML(wh));
+      }).setHTML(buildPopupHTML(wh, isOutageDown, isFailoverHub));
 
       const marker = new maplibregl.Marker({ element: el })
         .setLngLat([wh.lng, wh.lat])
@@ -652,7 +831,8 @@ export default function ControlTowerDashboard() {
       markersRef.current.push(marker);
     });
 
-    if (warehouseList.length > 1) {
+    if (warehouseList.length > 1 && !hasFittedBoundsRef.current) {
+      hasFittedBoundsRef.current = true;
       const bounds = new maplibregl.LngLatBounds();
       warehouseList.forEach((wh) => bounds.extend([wh.lng, wh.lat]));
       // Also include route endpoints in bounds
@@ -667,28 +847,50 @@ export default function ControlTowerDashboard() {
 
   /** Remove existing route layers and sources from the map. */
   function removeRouteLayers(map) {
+    if (animFrameRef.current) {
+      cancelAnimationFrame(animFrameRef.current);
+      animFrameRef.current = null;
+    }
+    truckMarkersRef.current.forEach((m) => m.remove());
+    truckMarkersRef.current = [];
+
     const style = map.getStyle();
     if (!style || !style.layers) return;
 
     style.layers.forEach((layer) => {
-      if (layer.id.startsWith('route-')) {
+      if (layer.id.startsWith('route-') || layer.id.startsWith('failover-')) {
         map.removeLayer(layer.id);
       }
     });
 
     Object.keys(style.sources || {}).forEach((sourceId) => {
-      if (sourceId.startsWith('route-')) {
+      if (sourceId.startsWith('route-') || sourceId.startsWith('failover-')) {
         map.removeSource(sourceId);
       }
     });
   }
 
   /** Add route lines (warehouse → customer) using GeoJSON with real road curvature. */
-  function addRoutes(map, routeList) {
+  function addRoutes(map, routeList, activeOutage = null) {
     if (!routeList || routeList.length === 0) return;
+
+    if (animFrameRef.current) {
+      cancelAnimationFrame(animFrameRef.current);
+      animFrameRef.current = null;
+    }
+    truckMarkersRef.current.forEach((m) => m.remove());
+    truckMarkersRef.current = [];
+    const trajectories = [];
+
+    const failedWhId = activeOutage?.disabledWarehouse?.id;
+    const affectedByOrderId = new Map();
+    if (activeOutage?.affectedOrders) {
+      activeOutage.affectedOrders.forEach((ao) => affectedByOrderId.set(ao.orderId, ao));
+    }
 
     routeList.forEach((route, routeIdx) => {
       if (!route.customer || !route.shipments) return;
+      if (route.status === 'CANCELLED') return; // Cancelled deliveries are halted, so skip drawing active route on map
 
       const customerLng = route.customer.lng;
       const customerLat = route.customer.lat;
@@ -713,8 +915,9 @@ export default function ControlTowerDashboard() {
 
       // Add route line for each shipment
       route.shipments.forEach((shipment, shipIdx) => {
+        const isSeveredByOutage = failedWhId && shipment.warehouseId === failedWhId;
         const sourceId = `route-${routeIdx}-${shipIdx}`;
-        const color = ROUTE_COLORS[shipIdx % ROUTE_COLORS.length];
+        const color = isSeveredByOutage ? '#ef4444' : ROUTE_COLORS[shipIdx % ROUTE_COLORS.length];
 
         const initialCoords = (shipment.coordinates && shipment.coordinates.length > 1)
           ? shipment.coordinates
@@ -751,8 +954,8 @@ export default function ControlTowerDashboard() {
             source: sourceId,
             paint: {
               'line-color': color,
-              'line-width': isRoadRoute ? 7 : 4,
-              'line-opacity': 0.25,
+              'line-width': isSeveredByOutage ? 3 : (isRoadRoute ? 7 : 4),
+              'line-opacity': isSeveredByOutage ? 0.12 : 0.25,
             },
             layout: {
               'line-cap': 'round',
@@ -760,16 +963,18 @@ export default function ControlTowerDashboard() {
             },
           });
 
-          // Primary route line
+          // Primary route line (or faint severed red dashed line during outage sim)
           map.addLayer({
             id: `${sourceId}-line`,
             type: 'line',
             source: sourceId,
             paint: {
               'line-color': color,
-              'line-width': isRoadRoute ? 3.5 : 2.5,
-              'line-opacity': 0.9,
-              ...(isRoadRoute ? {} : { 'line-dasharray': [2, 2] }),
+              'line-width': isSeveredByOutage ? 2 : (isRoadRoute ? 3.5 : 2.5),
+              'line-opacity': isSeveredByOutage ? 0.35 : 0.9,
+              ...(isSeveredByOutage
+                ? { 'line-dasharray': [2, 3] }
+                : (isRoadRoute ? {} : { 'line-dasharray': [2, 2] })),
             },
             layout: {
               'line-cap': 'round',
@@ -778,29 +983,172 @@ export default function ControlTowerDashboard() {
           });
         }
 
-        // If road coordinates weren't preloaded, fetch them dynamically via OSRM
-        if (!isRoadRoute && shipment.warehouseLat && shipment.warehouseLng && customerLat && customerLng) {
-          api.getRoadGeometry(shipment.warehouseLat, shipment.warehouseLng, customerLat, customerLng)
-            .then((res) => {
-              if (res?.coordinates && res.coordinates.length > 2 && map.getSource(sourceId)) {
-                map.getSource(sourceId).setData(makeGeojson(res.coordinates));
-                if (map.getLayer(`${sourceId}-line`)) {
-                  map.setPaintProperty(`${sourceId}-line`, 'line-width', 3.5);
-                  map.setPaintProperty(`${sourceId}-line`, 'line-opacity', 0.9);
-                  map.setPaintProperty(`${sourceId}-line`, 'line-dasharray', null);
+        // Skip placing an active truck on a severed outage route
+        if (!isSeveredByOutage) {
+          // Create live simulation truck marker
+          const truckEl = document.createElement('div');
+          truckEl.className = 'simulated-truck-marker';
+          truckEl.title = `In Transit: ${shipment.warehouseName} → Delivery Destination\nBox: ${shipment.boxSize || 'Standard'}\nClick to view order`;
+          truckEl.style.cssText = `
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: var(--color-bg-card-solid, #ffffff);
+            border: 2px solid ${color};
+            box-shadow: 0 0 10px ${color}88, 0 3px 8px rgba(0,0,0,0.3);
+            display: ${truckSimEnabled ? 'flex' : 'none'};
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            cursor: pointer;
+            transition: transform 0.15s ease;
+            user-select: none;
+          `;
+          truckEl.innerHTML = '🚚';
+          truckEl.addEventListener('mouseenter', () => { truckEl.style.transform = 'scale(1.25)'; });
+          truckEl.addEventListener('mouseleave', () => { truckEl.style.transform = 'scale(1)'; });
+          truckEl.addEventListener('click', (e) => {
+            e.stopPropagation();
+            setSelectedRoute(route);
+          });
+
+          const truckMarker = new maplibregl.Marker({ element: truckEl })
+            .setLngLat(initialCoords[0])
+            .addTo(map);
+
+          truckMarkersRef.current.push(truckMarker);
+
+          const traj = {
+            id: sourceId,
+            coords: initialCoords,
+            progress: (shipIdx * 0.35 + routeIdx * 0.25) % 1,
+            speed: 0.0006,
+            marker: truckMarker,
+          };
+          trajectories.push(traj);
+
+          // If road coordinates weren't preloaded, fetch them dynamically via OSRM
+          if (!isRoadRoute && shipment.warehouseLat && shipment.warehouseLng && customerLat && customerLng) {
+            api.getRoadGeometry(shipment.warehouseLat, shipment.warehouseLng, customerLat, customerLng)
+              .then((res) => {
+                if (res?.coordinates && res.coordinates.length > 2) {
+                  traj.coords = res.coordinates;
+                  if (map.getSource(sourceId)) {
+                    map.getSource(sourceId).setData(makeGeojson(res.coordinates));
+                  }
+                  if (map.getLayer(`${sourceId}-line`)) {
+                    map.setPaintProperty(`${sourceId}-line`, 'line-width', 3.5);
+                    map.setPaintProperty(`${sourceId}-line`, 'line-opacity', 0.9);
+                    map.setPaintProperty(`${sourceId}-line`, 'line-dasharray', null);
+                  }
+                  if (map.getLayer(`${sourceId}-glow`)) {
+                    map.setPaintProperty(`${sourceId}-glow`, 'line-width', 7);
+                    map.setPaintProperty(`${sourceId}-glow`, 'line-opacity', 0.25);
+                  }
                 }
-                if (map.getLayer(`${sourceId}-glow`)) {
-                  map.setPaintProperty(`${sourceId}-glow`, 'line-width', 7);
-                  map.setPaintProperty(`${sourceId}-glow`, 'line-opacity', 0.25);
-                }
-              }
-            })
-            .catch(() => {
-              // Silently keep straight-line fallback
-            });
+              })
+              .catch(() => {
+                // Silently keep straight-line fallback
+              });
+          }
         }
       });
+
+      // Draw dynamic failover route if this order is affected & reroutable
+      const affected = affectedByOrderId.get(route.orderId);
+      if (affected && affected.canReroute && affected.roadCoordinates?.length > 1) {
+        const failoverSourceId = `failover-${routeIdx}`;
+        const failoverGeojson = {
+          type: 'Feature',
+          geometry: {
+            type: 'LineString',
+            coordinates: affected.roadCoordinates,
+          },
+          properties: {
+            warehouseName: affected.newHub,
+          },
+        };
+
+        map.addSource(failoverSourceId, { type: 'geojson', data: failoverGeojson });
+        map.addLayer({
+          id: `${failoverSourceId}-glow`,
+          type: 'line',
+          source: failoverSourceId,
+          paint: {
+            'line-color': '#f59e0b',
+            'line-width': 9,
+            'line-opacity': 0.28,
+          },
+          layout: { 'line-cap': 'round', 'line-join': 'round' },
+        });
+        map.addLayer({
+          id: `${failoverSourceId}-line`,
+          type: 'line',
+          source: failoverSourceId,
+          paint: {
+            'line-color': '#f59e0b',
+            'line-width': 4,
+            'line-opacity': 0.95,
+            'line-dasharray': [3, 2],
+          },
+          layout: { 'line-cap': 'round', 'line-join': 'round' },
+        });
+
+        // Animated failover truck marker
+        const failoverTruckEl = document.createElement('div');
+        failoverTruckEl.className = 'simulated-truck-marker';
+        failoverTruckEl.title = `Failover Re-Route: ${affected.newHub} → Customer (${affected.etaImpact})`;
+        failoverTruckEl.style.cssText = `
+          width: 30px;
+          height: 30px;
+          border-radius: 50%;
+          background: #fffbeb;
+          border: 2.5px solid #f59e0b;
+          box-shadow: 0 0 14px rgba(245, 158, 11, 0.85), 0 3px 10px rgba(0,0,0,0.35);
+          display: ${truckSimEnabled ? 'flex' : 'none'};
+          align-items: center;
+          justify-content: center;
+          font-size: 14px;
+          cursor: pointer;
+          user-select: none;
+        `;
+        failoverTruckEl.innerHTML = '⚡';
+
+        const failoverMarker = new maplibregl.Marker({ element: failoverTruckEl })
+          .setLngLat(affected.roadCoordinates[0])
+          .addTo(map);
+        truckMarkersRef.current.push(failoverMarker);
+
+        trajectories.push({
+          id: failoverSourceId,
+          coords: affected.roadCoordinates,
+          progress: (routeIdx * 0.25) % 1,
+          speed: 0.0009,
+          marker: failoverMarker,
+        });
+      }
     });
+
+    // Start continuous truck animation loop
+    function animateTrucks() {
+      trajectories.forEach((t) => {
+        if (!t.coords || t.coords.length < 2) return;
+        t.progress = (t.progress + t.speed) % 1;
+        const totalSegs = t.coords.length - 1;
+        const exactIdx = t.progress * totalSegs;
+        const idx = Math.floor(exactIdx);
+        const frac = exactIdx - idx;
+        const p1 = t.coords[idx];
+        const p2 = t.coords[Math.min(idx + 1, totalSegs)];
+        if (p1 && p2) {
+          const lng = p1[0] + (p2[0] - p1[0]) * frac;
+          const lat = p1[1] + (p2[1] - p1[1]) * frac;
+          t.marker.setLngLat([lng, lat]);
+        }
+      });
+      animFrameRef.current = requestAnimationFrame(animateTrucks);
+    }
+    animFrameRef.current = requestAnimationFrame(animateTrucks);
   }
 
   /** Fit map bounds to all markers */
@@ -826,12 +1174,12 @@ export default function ControlTowerDashboard() {
   return (
     <div className="animate-fade-in">
       {/* Page Header */}
-      <div className="mb-6">
-        <h1 className="page-title">
+      <div style={{ marginBottom: 28 }}>
+        <h1 className="page-title" style={{ marginBottom: 6 }}>
           Control Tower
         </h1>
-        <p className="page-subtitle mt-1">
-          Real-time warehouse and shipment monitoring
+        <p className="page-subtitle">
+          Real-time warehouse inventory, multi-shipment routes, and active order monitoring
         </p>
       </div>
 
@@ -839,7 +1187,7 @@ export default function ControlTowerDashboard() {
       {loading ? (
         <SkeletonStats />
       ) : !error && warehouses.length > 0 ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4" style={{ marginBottom: 28 }}>
           <KpiCard
             icon={<WarehouseIcon />}
             label="Active Warehouses"
@@ -880,7 +1228,7 @@ export default function ControlTowerDashboard() {
         </div>
       ) : null}
 
-      <div className="mt-6">
+      <div>
         {loading ? (
           <SkeletonMap />
         ) : error ? (
@@ -898,69 +1246,602 @@ export default function ControlTowerDashboard() {
           </div>
         ) : (
           <>
-          {/* Map Section Header */}
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="section-title flex items-center gap-2">
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 6.75V15m6-6v8.25m.503 3.498 4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 0 0-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0Z" />
-              </svg>
-              Network Map
-            </h2>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleFitBounds}
-                className="btn-ghost text-xs flex items-center gap-1"
-                aria-label="Fit map to all markers"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
-                </svg>
-                Fit All
-              </button>
-              <button
-                onClick={fetchData}
-                className="btn-ghost text-xs flex items-center gap-1"
-                aria-label="Refresh map data"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182" />
-                </svg>
-                Refresh
-              </button>
-            </div>
-          </div>
-
-          {/* Low stock filter indicator */}
-          {highlightLowStock && lowStockCount > 0 && (
-            <div className="mb-3 flex items-center gap-2 animate-fade-in">
-              <span className="badge badge--warning">
-                Showing {lowStockCount} low-stock warehouse{lowStockCount !== 1 ? 's' : ''}
-              </span>
-              <button
-                onClick={() => setHighlightLowStock(false)}
-                className="text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] transition-colors"
-              >
-                Clear filter
-              </button>
-            </div>
-          )}
-
-          <div className="relative glass-card overflow-hidden" style={{ minHeight: '460px' }}>
-            <div ref={mapContainerRef} className="w-full" style={{ height: 'clamp(400px, 50vh, 600px)' }} />
-            <MapLegend />
-            <SelectedOrderPanel route={selectedRoute} onClose={() => setSelectedRoute(null)} />
-          </div>
-
-          {/* Recent Orders List — click to select */}
-          {routes.length > 0 && (
-            <div className="mt-4 glass-card p-4">
-              <div className="flex items-center justify-between mb-3">
-              <h3 className="section-title">
-                  Recent Orders
-                </h3>
-                <span className="badge badge--accent">{routes.length} order{routes.length !== 1 ? 's' : ''}</span>
+          {/* Network Map Section Card — styled exactly as an Analytics.jsx Section */}
+          <div className="glass-card" style={{ padding: '20px 24px', marginBottom: 28, borderRadius: 'var(--radius-lg)' }}>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3" style={{ marginBottom: 16 }}>
+              <div className="flex items-center gap-2.5">
+                <span style={{ fontSize: 16 }}>🗺️</span>
+                <div>
+                  <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-primary)', textTransform: 'uppercase', letterSpacing: '0.06em', margin: 0 }}>
+                    Network Map & Active Routes
+                  </h3>
+                  <p style={{ fontSize: 11, color: 'var(--color-text-muted)', margin: '2px 0 0' }}>
+                    {warehouses.length} active fulfillment centers across India • {routes.length} routed deliveries
+                  </p>
+                </div>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-48 overflow-y-auto">
+              <div className="flex items-center gap-2">
+                {highlightLowStock && lowStockCount > 0 && (
+                  <div className="flex items-center gap-1.5 mr-1 animate-fade-in">
+                    <span className="badge badge--warning">
+                      {lowStockCount} Low-Stock Filtered
+                    </span>
+                    <button
+                      onClick={() => setHighlightLowStock(false)}
+                      className="text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] transition-colors cursor-pointer"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                )}
+                <button
+                  onClick={handleFitBounds}
+                  className="px-3 py-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-primary)] hover:bg-[var(--color-bg-hover)] text-xs font-semibold text-[var(--color-text-primary)] flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
+                  aria-label="Fit map to all markers"
+                >
+                  <svg className="w-3.5 h-3.5 text-[var(--color-accent)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
+                  </svg>
+                  Fit All
+                </button>
+                <button
+                  onClick={fetchData}
+                  className="px-3 py-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-primary)] hover:bg-[var(--color-bg-hover)] text-xs font-semibold text-[var(--color-text-primary)] flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
+                  aria-label="Refresh map data"
+                >
+                  <svg className="w-3.5 h-3.5 text-[var(--color-accent)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182" />
+                  </svg>
+                  Refresh
+                </button>
+                <button
+                  onClick={() => setTruckSimEnabled(prev => !prev)}
+                  className={`px-3 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer ${
+                    truckSimEnabled
+                      ? 'border-[var(--color-success)] bg-[var(--color-success-glow)] text-[var(--color-success)]'
+                      : 'border-[var(--color-border)] bg-[var(--color-bg-primary)] text-[var(--color-text-muted)]'
+                  }`}
+                  title="Toggle live delivery trucks simulation on map"
+                >
+                  <span>🚚</span>
+                  <span>{truckSimEnabled ? 'Truck Sim: ON' : 'Truck Sim: OFF'}</span>
+                </button>
+
+                {/* Outage Simulator Selector */}
+                <div className="relative" ref={outageMenuRef}>
+                  <button
+                    onClick={() => setOutageMenuOpen(prev => !prev)}
+                    disabled={outageLoading}
+                    style={{
+                      padding: '6px 12px',
+                      borderRadius: 8,
+                      border: outageSim ? '1px solid rgba(239, 68, 68, 0.55)' : '1px solid rgba(245, 158, 11, 0.45)',
+                      background: outageSim ? 'rgba(239, 68, 68, 0.14)' : 'rgba(245, 158, 11, 0.12)',
+                      color: outageSim ? '#f87171' : '#f59e0b',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      cursor: 'pointer',
+                    }}
+                    title="Simulate a warehouse outage and preview dynamic failover routing"
+                  >
+                    <span>{outageLoading ? '⏳' : '⚡'}</span>
+                    <span>
+                      {outageLoading
+                        ? 'Simulating…'
+                        : outageSim
+                          ? `Outage: ${outageSim.disabledWarehouse.name}`
+                          : 'Outage Simulator'}
+                    </span>
+                    <span style={{ fontSize: 10, opacity: 0.75 }}>▾</span>
+                  </button>
+
+                  {outageMenuOpen && (
+                    <div
+                      className="absolute right-0 z-30 animate-fade-in"
+                      style={{
+                        marginTop: 8,
+                        width: 300,
+                        padding: 10,
+                        borderRadius: 14,
+                        border: '1px solid var(--color-border)',
+                        background: 'var(--color-bg-card-solid)',
+                        boxShadow: '0 18px 44px rgba(0, 0, 0, 0.38)',
+                        backdropFilter: 'blur(16px)',
+                      }}
+                    >
+                      <div style={{ padding: '6px 10px 10px', borderBottom: '1px solid var(--color-border-subtle)', marginBottom: 6 }}>
+                        <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--color-text-primary)', margin: 0 }}>
+                          What-If Outage Simulator
+                        </p>
+                        <p style={{ fontSize: 10, color: 'var(--color-text-muted)', margin: '3px 0 0' }}>
+                          Select a hub to simulate failure (Read-only · Zero DB changes)
+                        </p>
+                      </div>
+                      <div style={{ maxHeight: 240, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        {warehouses.filter(w => w.active !== false).map(wh => {
+                          const isCurrentOutage = outageSim?.disabledWarehouse?.id === wh.id;
+                          return (
+                            <button
+                              key={wh.id}
+                              onClick={() => handleSimulateOutage(wh.id)}
+                              style={{
+                                width: '100%',
+                                textAlign: 'left',
+                                padding: '9px 10px',
+                                borderRadius: 8,
+                                border: 'none',
+                                fontSize: 12,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: 8,
+                                cursor: 'pointer',
+                                background: isCurrentOutage ? 'rgba(239, 68, 68, 0.14)' : 'transparent',
+                                color: isCurrentOutage ? '#f87171' : 'var(--color-text-primary)',
+                                fontWeight: isCurrentOutage ? 600 : 500,
+                              }}
+                              onMouseEnter={e => { if (!isCurrentOutage) e.currentTarget.style.background = 'var(--color-bg-hover)'; }}
+                              onMouseLeave={e => { if (!isCurrentOutage) e.currentTarget.style.background = 'transparent'; }}
+                            >
+                              <span className="truncate">Simulate {wh.name} Failure</span>
+                              <span style={{
+                                fontSize: 10, flexShrink: 0, padding: '2px 7px', borderRadius: 6,
+                                background: 'rgba(239, 68, 68, 0.12)', color: '#f87171', fontWeight: 700,
+                              }}>
+                                {isCurrentOutage ? 'ACTIVE' : 'TEST'}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {outageSim && (
+                        <div style={{ paddingTop: 8, marginTop: 6, borderTop: '1px solid var(--color-border-subtle)' }}>
+                          <button
+                            onClick={() => { setOutageMenuOpen(false); handleRestoreAllHubs(); }}
+                            style={{
+                              width: '100%', padding: '8px 12px', borderRadius: 8, border: 'none',
+                              fontSize: 12, fontWeight: 600, background: 'rgba(16, 185, 129, 0.14)',
+                              color: '#10b981', cursor: 'pointer', textAlign: 'center',
+                            }}
+                          >
+                            ↺ Restore All Hubs
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {outageSim && (
+                  <>
+                    <button
+                      onClick={() => setOutageModalOpen(true)}
+                      style={{
+                        padding: '6px 12px',
+                        borderRadius: 8,
+                        border: '1px solid rgba(56, 189, 248, 0.45)',
+                        background: 'rgba(56, 189, 248, 0.12)',
+                        color: '#38bdf8',
+                        fontSize: 12,
+                        fontWeight: 600,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <span>📊</span>
+                      <span>Impact Report</span>
+                    </button>
+                    <button
+                      onClick={handleRestoreAllHubs}
+                      style={{
+                        padding: '6px 12px',
+                        borderRadius: 8,
+                        border: '1px solid rgba(16, 185, 129, 0.45)',
+                        background: 'rgba(16, 185, 129, 0.14)',
+                        color: '#10b981',
+                        fontSize: 12,
+                        fontWeight: 600,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <span>↺</span>
+                      <span>Restore All Hubs</span>
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {outageError && (
+              <div style={{
+                marginBottom: 12, padding: '10px 16px', borderRadius: 10,
+                border: '1px solid rgba(239,68,68,0.4)', background: 'rgba(239,68,68,0.1)',
+                color: '#f87171', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              }}>
+                <span>⚠ {outageError}</span>
+                <button onClick={() => setOutageError(null)} style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', fontWeight: 700, marginLeft: 16 }}>✕</button>
+              </div>
+            )}
+
+            {/* Full-Width Live Network Map (never squished!) */}
+            <div className="relative overflow-hidden" style={{ minHeight: '440px', borderRadius: 'var(--radius-md)', border: outageSim ? '1.5px solid rgba(239, 68, 68, 0.55)' : '1px solid var(--color-border)' }}>
+              <div ref={mapContainerRef} className="w-full" style={{ height: 'clamp(420px, 52vh, 560px)' }} />
+              <MapLegend outageActive={Boolean(outageSim)} />
+              <SelectedOrderPanel route={selectedRoute} onClose={() => setSelectedRoute(null)} />
+
+              {/* Compact Floating Outage Status Pill on Map (when modal is minimized/closed) */}
+              {outageSim && !outageModalOpen && (
+                <div
+                  className="animate-fade-in"
+                  style={{
+                    position: 'absolute',
+                    top: 14,
+                    left: 14,
+                    zIndex: 15,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    flexWrap: 'wrap',
+                    padding: '10px 14px',
+                    borderRadius: 12,
+                    background: 'var(--color-bg-card-solid)',
+                    border: '1px solid rgba(239, 68, 68, 0.5)',
+                    boxShadow: '0 10px 28px rgba(0, 0, 0, 0.28)',
+                  }}
+                >
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    fontSize: 12, fontWeight: 700, color: '#ef4444',
+                  }}>
+                    🚨 {outageSim.disabledWarehouse.name} OFFLINE
+                  </span>
+                  <span style={{ fontSize: 11, color: 'var(--color-text-secondary)', fontWeight: 500 }}>
+                    {outageSim.summary.totalAffected} order{outageSim.summary.totalAffected !== 1 ? 's' : ''} re-routed
+                    {outageSim.summary.totalAffected > 0 ? ` (${outageSim.summary.avgCostIncrease >= 0 ? '+' : ''}₹${outageSim.summary.avgCostIncrease.toFixed(2)})` : ''}
+                  </span>
+                  <button
+                    onClick={() => setOutageModalOpen(true)}
+                    style={{
+                      padding: '5px 11px', borderRadius: 7, border: 'none', cursor: 'pointer',
+                      background: 'var(--color-accent-gradient)', color: '#fff',
+                      fontSize: 11, fontWeight: 600,
+                    }}
+                  >
+                    📊 View Report
+                  </button>
+                  <button
+                    onClick={handleRestoreAllHubs}
+                    style={{
+                      padding: '5px 10px', borderRadius: 7, cursor: 'pointer',
+                      border: '1px solid rgba(16,185,129,0.4)', background: 'rgba(16,185,129,0.12)',
+                      color: '#10b981', fontSize: 11, fontWeight: 600,
+                    }}
+                  >
+                    ↺ Restore
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* ═══════════════════════════════════════════════════════
+             *  OUTAGE SIMULATION REPORT POP-UP MODAL (OrderConfirmation style)
+             * ═══════════════════════════════════════════════════════ */}
+            {outageSim && outageModalOpen && (
+              <div
+                id="outage-sim-modal-backdrop"
+                onClick={(e) => { if (e.target.id === 'outage-sim-modal-backdrop') setOutageModalOpen(false); }}
+                style={{
+                  position: 'fixed',
+                  inset: 0,
+                  zIndex: 9999,
+                  backgroundColor: 'rgba(2, 6, 23, 0.72)',
+                  backdropFilter: 'blur(8px)',
+                  WebkitBackdropFilter: 'blur(8px)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '24px 16px',
+                  overflowY: 'auto',
+                }}
+              >
+                <div
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label="Warehouse Outage Simulation Report"
+                  className="animate-fade-in"
+                  style={{
+                    width: '100%',
+                    maxWidth: 660,
+                    maxHeight: '90vh',
+                    overflowY: 'auto',
+                    background: 'var(--color-bg-card-solid)',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: 20,
+                    padding: '28px 30px',
+                    boxShadow: '0 24px 60px rgba(0, 0, 0, 0.45)',
+                    fontFamily: 'var(--font-sans)',
+                    position: 'relative',
+                  }}
+                >
+                  {/* Top Close / Back bar */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+                    <button
+                      onClick={() => setOutageModalOpen(false)}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 6,
+                        padding: '6px 12px', borderRadius: 8, cursor: 'pointer',
+                        background: 'var(--color-bg-hover)', border: '1px solid var(--color-border)',
+                        color: 'var(--color-text-secondary)', fontSize: 12, fontWeight: 600,
+                      }}
+                    >
+                      ← Back to Live Map
+                    </button>
+                    <span style={{
+                      fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
+                      padding: '4px 10px', borderRadius: 99,
+                      background: 'rgba(56, 189, 248, 0.12)', color: '#38bdf8',
+                      border: '1px solid rgba(56, 189, 248, 0.28)',
+                    }}>
+                      Read-Only Dry Run · Zero DB Changes
+                    </span>
+                    <button
+                      onClick={() => setOutageModalOpen(false)}
+                      aria-label="Close outage simulation report"
+                      style={{
+                        width: 32, height: 32, borderRadius: 8, cursor: 'pointer',
+                        background: 'var(--color-bg-hover)', border: '1px solid var(--color-border)',
+                        color: 'var(--color-text-muted)', fontSize: 15, fontWeight: 700,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  {/* Hero Status Section (Order Confirmed style) */}
+                  <div style={{ textAlign: 'center', marginBottom: 22 }}>
+                    <div style={{
+                      width: 64, height: 64, borderRadius: '50%', margin: '0 auto 14px',
+                      background: 'rgba(239, 68, 68, 0.15)',
+                      border: '2.5px solid #ef4444',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 28,
+                      boxShadow: '0 0 24px rgba(239, 68, 68, 0.3)',
+                    }}>
+                      🚨
+                    </div>
+                    <h2 style={{ fontSize: 22, fontWeight: 800, color: 'var(--color-text-primary)', margin: '0 0 6px', letterSpacing: '-0.02em' }}>
+                      Outage Failover Simulated
+                    </h2>
+                    <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: 0 }}>
+                      Dynamic routing engine re-evaluated active deliveries with{' '}
+                      <strong style={{ color: '#f87171' }}>{outageSim.disabledWarehouse.name}</strong> offline
+                    </p>
+                  </div>
+
+                  {/* Simulated Hub Status Strip */}
+                  <div style={{
+                    background: 'rgba(239, 68, 68, 0.08)',
+                    border: '1px solid rgba(239, 68, 68, 0.28)',
+                    borderRadius: 14,
+                    padding: '14px 18px',
+                    marginBottom: 18,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: 12,
+                  }}>
+                    <div>
+                      <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#f87171', margin: '0 0 3px' }}>
+                        Simulated Offline Hub
+                      </p>
+                      <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--color-text-primary)', margin: 0 }}>
+                        {outageSim.disabledWarehouse.name}
+                      </p>
+                    </div>
+                    <span style={{
+                      padding: '5px 12px', borderRadius: 99, fontSize: 11, fontWeight: 700,
+                      background: 'rgba(239, 68, 68, 0.18)', color: '#f87171',
+                    }}>
+                      ● OFFLINE (SIMULATED)
+                    </span>
+                  </div>
+
+                  {/* 4 Spacious KPI Summary Cards */}
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+                    gap: 12,
+                    marginBottom: 20,
+                  }}>
+                    <div style={{ padding: '14px 16px', borderRadius: 12, background: 'var(--color-bg-hover)', border: '1px solid var(--color-border-subtle)' }}>
+                      <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-text-muted)', margin: '0 0 6px' }}>Impacted Orders</p>
+                      <p style={{ fontSize: 22, fontWeight: 800, color: 'var(--color-text-primary)', margin: 0 }}>{outageSim.summary.totalAffected}</p>
+                    </div>
+                    <div style={{ padding: '14px 16px', borderRadius: 12, background: 'var(--color-bg-hover)', border: '1px solid var(--color-border-subtle)' }}>
+                      <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-text-muted)', margin: '0 0 6px' }}>Failover Success</p>
+                      <p style={{ fontSize: 22, fontWeight: 800, color: outageSim.summary.canFullyReroute ? '#10b981' : '#f59e0b', margin: 0 }}>
+                        {outageSim.summary.totalAffected === 0
+                          ? '100%'
+                          : `${Math.round((outageSim.summary.rerouteableCount / outageSim.summary.totalAffected) * 100)}%`}
+                      </p>
+                    </div>
+                    <div style={{ padding: '14px 16px', borderRadius: 12, background: 'var(--color-bg-hover)', border: '1px solid var(--color-border-subtle)' }}>
+                      <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-text-muted)', margin: '0 0 6px' }}>Avg Cost Delta</p>
+                      <p style={{ fontSize: 20, fontWeight: 800, color: outageSim.summary.avgCostIncrease > 0 ? '#f59e0b' : '#10b981', margin: 0 }}>
+                        {outageSim.summary.avgCostIncrease >= 0 ? '+' : ''}₹{outageSim.summary.avgCostIncrease.toFixed(2)}
+                      </p>
+                    </div>
+                    <div style={{ padding: '14px 16px', borderRadius: 12, background: 'var(--color-bg-hover)', border: '1px solid var(--color-border-subtle)' }}>
+                      <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-text-muted)', margin: '0 0 6px' }}>Avg Dist Delta</p>
+                      <p style={{ fontSize: 20, fontWeight: 800, color: '#38bdf8', margin: 0 }}>
+                        {outageSim.summary.avgDistanceIncrease >= 0 ? '+' : ''}{outageSim.summary.avgDistanceIncrease.toFixed(1)} km
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Per-Order Breakdown Cards */}
+                  {outageSim.affectedOrders.length === 0 ? (
+                    <div style={{
+                      borderRadius: 14, padding: '20px 22px', textAlign: 'center', marginBottom: 22,
+                      background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.25)',
+                    }}>
+                      <p style={{ fontSize: 14, fontWeight: 700, color: '#10b981', margin: '0 0 6px' }}>
+                        ✓ 100% Network Resilience — Zero Active Orders Impacted
+                      </p>
+                      <p style={{ fontSize: 12, color: 'var(--color-text-muted)', margin: 0, lineHeight: 1.5 }}>
+                        Abhi {outageSim.disabledWarehouse.name} par koi active in-transit order assigned nahi hai. Baaki {outageSim.healthyWarehouses?.length || 0} backup hubs online hain.
+                      </p>
+                    </div>
+                  ) : (
+                    <div style={{ marginBottom: 22 }}>
+                      <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--color-text-muted)', margin: '0 0 10px' }}>
+                        Dynamic Failover Re-Routing ({outageSim.affectedOrders.length})
+                      </p>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        {outageSim.affectedOrders.map((ao) => (
+                          <div
+                            key={ao.orderId}
+                            style={{
+                              borderRadius: 14,
+                              padding: '16px 18px',
+                              background: 'var(--color-surface-subtle, var(--color-bg-primary))',
+                              border: '1px solid var(--color-border)',
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, gap: 8 }}>
+                              <span style={{
+                                fontFamily: 'monospace', fontSize: 12, fontWeight: 700,
+                                padding: '3px 9px', borderRadius: 6,
+                                background: 'rgba(129, 140, 248, 0.12)', color: 'var(--color-accent)',
+                              }}>
+                                ORD-{ao.orderId.slice(0, 8)}
+                              </span>
+                              <span style={{
+                                fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 99,
+                                background: ao.canReroute ? 'rgba(16, 185, 129, 0.14)' : 'rgba(239, 68, 68, 0.14)',
+                                color: ao.canReroute ? '#10b981' : '#f87171',
+                              }}>
+                                {ao.canReroute ? `✓ Stock ${ao.stockFeasibility}% Available` : '✕ Stock Shortfall'}
+                              </span>
+                            </div>
+
+                            {ao.canReroute ? (
+                              <>
+                                {/* Hub Transfer Visual Row */}
+                                <div style={{
+                                  display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+                                  padding: '10px 12px', borderRadius: 10, marginBottom: 12,
+                                  background: 'var(--color-bg-hover)',
+                                }}>
+                                  <span style={{ fontSize: 12, color: '#f87171', textDecoration: 'line-through', fontWeight: 500 }}>
+                                    🚨 {ao.originalHub}
+                                  </span>
+                                  <span style={{ fontSize: 14, color: 'var(--color-text-muted)' }}>→</span>
+                                  <span style={{ fontSize: 13, color: '#f59e0b', fontWeight: 700 }}>
+                                    ⚡ {ao.newHub}
+                                  </span>
+                                </div>
+
+                                <div style={{
+                                  display: 'grid',
+                                  gridTemplateColumns: 'repeat(3, 1fr)',
+                                  gap: 10,
+                                  paddingTop: 10,
+                                  borderTop: '1px solid var(--color-border-subtle)',
+                                }}>
+                                  <div>
+                                    <span style={{ fontSize: 10, color: 'var(--color-text-muted)', display: 'block', marginBottom: 2 }}>Cost Delta</span>
+                                    <span style={{ fontSize: 13, fontWeight: 700, color: ao.costDelta > 0 ? '#f59e0b' : '#10b981' }}>
+                                      {ao.costDelta >= 0 ? '+' : ''}₹{ao.costDelta.toFixed(2)}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span style={{ fontSize: 10, color: 'var(--color-text-muted)', display: 'block', marginBottom: 2 }}>Distance Delta</span>
+                                    <span style={{ fontSize: 13, fontWeight: 700, color: '#38bdf8' }}>
+                                      {ao.distanceDelta >= 0 ? '+' : ''}{ao.distanceDelta.toFixed(1)} km
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span style={{ fontSize: 10, color: 'var(--color-text-muted)', display: 'block', marginBottom: 2 }}>ETA Impact</span>
+                                    <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-primary)' }}>
+                                      {ao.etaImpact}
+                                    </span>
+                                  </div>
+                                </div>
+                              </>
+                            ) : (
+                              <p style={{ fontSize: 12, color: '#f87171', margin: 0 }}>
+                                ⚠ {ao.reason || 'Insufficient backup stock at alternate hubs'}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Footer Actions */}
+                  <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                    <button
+                      onClick={() => setOutageModalOpen(false)}
+                      style={{
+                        flex: 1, minWidth: 180, padding: '12px 18px', borderRadius: 10, cursor: 'pointer',
+                        background: 'var(--color-accent-gradient)', border: 'none', color: '#fff',
+                        fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                      }}
+                    >
+                      <span>🗺️</span>
+                      <span>View Re-Routing on Live Map</span>
+                    </button>
+                    <button
+                      onClick={handleRestoreAllHubs}
+                      style={{
+                        flex: 1, minWidth: 160, padding: '12px 18px', borderRadius: 10, cursor: 'pointer',
+                        background: 'rgba(16, 185, 129, 0.14)', border: '1px solid rgba(16, 185, 129, 0.4)',
+                        color: '#10b981', fontSize: 13, fontWeight: 700,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                      }}
+                    >
+                      <span>↺</span>
+                      <span>Restore All Hubs</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Recent Orders List Card — styled exactly as an Analytics.jsx Section */}
+          {routes.length > 0 && (
+            <div className="glass-card" style={{ padding: '20px 24px', borderRadius: 'var(--radius-lg)' }}>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3" style={{ marginBottom: 20 }}>
+                <div className="flex items-center gap-2.5">
+                  <span style={{ fontSize: 16 }}>📦</span>
+                  <div>
+                    <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-primary)', textTransform: 'uppercase', letterSpacing: '0.06em', margin: 0 }}>
+                      Recent Routed Orders
+                    </h3>
+                    <p style={{ fontSize: 11, color: 'var(--color-text-muted)', margin: '2px 0 0' }}>
+                      Click any order card to focus its route on the map, or click Details to view full multi-step algorithm analysis
+                    </p>
+                  </div>
+                </div>
+                <span className="badge badge--accent self-start sm:self-auto">
+                  {routes.length} Active Route{routes.length !== 1 ? 's' : ''}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {routes.slice(0, 12).map((route) => {
                   const isSelected = selectedRoute?.orderId === route.orderId;
                   const isSplit = (route.shipments || []).length > 1;
@@ -970,51 +1851,83 @@ export default function ControlTowerDashboard() {
                     if (s.delayRisk === 'LOW') return acc || 'LOW';
                     return acc;
                   }, null);
-                  const riskDotColor = highestRisk === 'HIGH' ? '#ef4444' : highestRisk === 'MEDIUM' ? '#f59e0b' : highestRisk === 'LOW' ? '#10b981' : null;
+                  const riskDotColor = highestRisk === 'HIGH' ? '#ef4444' : highestRisk === 'MEDIUM' ? '#f59e0b' : '#10b981';
+                  const totalOrderCost = (route.shipments || []).reduce((sum, s) => sum + parseFloat(s.totalCost || 0), 0);
 
                   return (
-                    <button
+                    <div
                       key={route.orderId}
                       onClick={() => setSelectedRoute(isSelected ? null : route)}
-                      className={`text-left rounded-lg border p-2.5 transition-all duration-200 ${
+                      className={`text-left rounded-xl border p-4 transition-all duration-200 cursor-pointer flex flex-col justify-between ${
                         isSelected
-                          ? 'border-[var(--color-accent)] bg-[var(--color-accent-glow)]'
-                          : 'border-[var(--color-border-subtle)] bg-[var(--color-bg-primary)] hover:border-[var(--color-border)]'
+                          ? 'border-[var(--color-accent)] bg-[var(--color-accent-glow)] shadow-md'
+                          : 'border-[var(--color-border)] bg-[var(--color-bg-primary)] hover:border-[var(--color-accent)] hover:shadow-sm'
                       }`}
+                      style={{ minHeight: 110 }}
                     >
-                      <div className="flex items-center gap-2">
-                        <div className="flex -space-x-1">
+                      {/* Top row: Order badge + risk */}
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-[var(--color-bg-hover)] text-[var(--color-accent)] font-mono">
+                            ORD-{route.orderId?.slice(0, 8)}
+                          </span>
+                          {isSplit && (
+                            <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-600 dark:text-purple-400">
+                              Split
+                            </span>
+                          )}
+                          {route.status === 'CANCELLED' && (
+                            <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-red-500/15 text-red-500 dark:text-red-400">
+                              Cancelled
+                            </span>
+                          )}
+                        </div>
+                        {highestRisk && (
+                          <span className="flex items-center gap-1 text-[10px] font-medium" style={{ color: riskDotColor }}>
+                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: riskDotColor }} />
+                            {highestRisk} Risk
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Origin Warehouses */}
+                      <div className="flex items-center gap-2 my-1">
+                        <div className="flex -space-x-1 shrink-0">
                           {(route.shipments || []).slice(0, 3).map((s, idx) => (
                             <span
                               key={idx}
-                              className="w-2.5 h-2.5 rounded-full border border-[var(--color-bg-primary)]"
+                              className="w-3 h-3 rounded-full border-2 border-[var(--color-bg-primary)]"
                               style={{ background: ROUTE_COLORS[idx % ROUTE_COLORS.length] }}
                             />
                           ))}
                         </div>
-                        <span className="text-xs text-[var(--color-text-primary)] font-medium truncate">
-                          {(route.shipments || []).map((s) => s.warehouseName).join(' → ')}
+                        <span className="text-xs text-[var(--color-text-primary)] font-semibold truncate">
+                          {(route.shipments || []).map((s) => s.warehouseName).join(' + ')}
                         </span>
-                        {riskDotColor && (
+                      </div>
+
+                      {/* Bottom row: Shipments & Cost & Link */}
+                      <div className="flex items-center justify-between pt-2.5 mt-2 border-t border-[var(--color-border-subtle)]">
+                        <span className="text-[11px] text-[var(--color-text-muted)]">
+                          📦 {route.shipments?.length || 0} shipment{(route.shipments?.length || 0) !== 1 ? 's' : ''}
+                        </span>
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs text-[var(--color-success)] font-bold">
+                            ₹{totalOrderCost.toFixed(2)}
+                          </span>
                           <span
-                            title={`Delay Risk: ${highestRisk}`}
-                            style={{
-                              width: 7, height: 7, borderRadius: '50%',
-                              background: riskDotColor, flexShrink: 0, marginLeft: 'auto'
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/host/orders/${route.orderId}`);
                             }}
-                          />
-                        )}
+                            className="text-[11px] text-[var(--color-accent)] font-semibold hover:underline"
+                            title="Open order analysis"
+                          >
+                            Details →
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex items-center justify-between mt-1">
-                        <span className="text-[10px] text-[var(--color-text-muted)]">
-                          {route.shipments?.length || 0} shipment{(route.shipments?.length || 0) !== 1 ? 's' : ''}
-                          {isSplit && ' (split)'}
-                        </span>
-                        <span className="text-[10px] text-[var(--color-accent)] font-semibold">
-                          ₹{(route.shipments || []).reduce((sum, s) => sum + parseFloat(s.totalCost || 0), 0).toFixed(2)}
-                        </span>
-                      </div>
-                    </button>
+                    </div>
                   );
                 })}
               </div>

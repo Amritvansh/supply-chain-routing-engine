@@ -122,9 +122,13 @@ function StatusBadge({ status }) {
   const map = {
     ROUTED: { bg: 'rgba(16,185,129,0.15)', color: '#34d399', label: 'Routed' },
     SPLIT_ROUTED: { bg: 'rgba(59,130,246,0.15)', color: '#60a5fa', label: 'Split Routed' },
+    MULTI_WAREHOUSE_SPLIT: { bg: 'rgba(59,130,246,0.15)', color: '#60a5fa', label: 'Split Routed' },
     PENDING: { bg: 'rgba(245,158,11,0.15)', color: '#fbbf24', label: 'Pending' },
     FULFILLED: { bg: 'rgba(16,185,129,0.15)', color: '#34d399', label: 'Fulfilled' },
+    DELIVERED: { bg: 'rgba(16,185,129,0.15)', color: '#34d399', label: 'Delivered' },
     FAILED: { bg: 'rgba(239,68,68,0.15)', color: '#f87171', label: 'Failed' },
+    CANCELLED: { bg: 'rgba(239,68,68,0.15)', color: '#f87171', label: 'Cancelled' },
+    RETURN_REQUESTED: { bg: 'rgba(245,158,11,0.15)', color: '#fbbf24', label: 'Return Requested' },
   };
   const s = map[status] || { bg: 'rgba(100,116,139,0.15)', color: '#94a3b8', label: status };
 
@@ -188,11 +192,14 @@ export default function HostOrders() {
   /* ── Summary stats ──────────────────────────────────────── */
   const stats = useMemo(() => {
     const total = orders.length;
-    const routed = orders.filter(o => o.status === 'ROUTED').length;
-    const split = orders.filter(o => o.status === 'SPLIT_ROUTED').length;
+    const routed = orders.filter(o => ['ROUTED', 'MULTI_WAREHOUSE_SPLIT'].includes(o.status)).length;
+    const split = orders.filter(o => ['SPLIT_ROUTED', 'MULTI_WAREHOUSE_SPLIT'].includes(o.status)).length;
     const fulfilled = orders.filter(o => o.status === 'FULFILLED').length;
-    const revenue = orders.reduce((s, o) => s + (o.totalAmount || 0), 0);
-    return { total, routed, split, fulfilled, revenue };
+    const cancelled = orders.filter(o => ['CANCELLED', 'RETURN_REQUESTED'].includes(o.status)).length;
+    const revenue = orders
+      .filter(o => !['CANCELLED', 'RETURN_REQUESTED'].includes(o.status) && !o.isFlashTest && !(o.idempotencyKey || '').startsWith('flash-test-'))
+      .reduce((s, o) => s + (o.totalAmount || 0), 0);
+    return { total, routed, split, fulfilled, cancelled, revenue };
   }, [orders]);
 
   /* ── Unique statuses for filter ─────────────────────────── */
@@ -222,7 +229,7 @@ export default function HostOrders() {
       {toast && <Toast {...toast} onClose={() => setToast(null)} />}
 
       {/* ── Header ─────────────────────────────────────────── */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28, flexWrap: 'wrap', gap: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 28, flexWrap: 'wrap', gap: 16, paddingRight: 118 }}>
         <div>
           <h1 style={{ fontSize: 26, fontWeight: 700, color: 'var(--color-text-primary)', margin: 0, fontFamily: 'var(--font-sans)' }}>
             All Orders
@@ -234,12 +241,13 @@ export default function HostOrders() {
         <button
           onClick={fetchOrders}
           style={{
-            padding: '10px 20px',
+            marginTop: -14,
+            padding: '7px 14px',
             background: 'rgba(59,130,246,0.1)',
             color: '#60a5fa',
-            border: '1px solid rgba(59,130,246,0.2)',
+            border: '1px solid rgba(59,130,246,0.25)',
             borderRadius: 'var(--radius-sm)',
-            fontSize: 13, fontWeight: 500,
+            fontSize: 12, fontWeight: 600,
             fontFamily: 'var(--font-sans)',
             cursor: 'pointer', transition: 'all 0.15s',
             display: 'flex', alignItems: 'center', gap: 6,
@@ -247,7 +255,7 @@ export default function HostOrders() {
           onMouseEnter={e => { e.currentTarget.style.background = 'rgba(59,130,246,0.2)'; }}
           onMouseLeave={e => { e.currentTarget.style.background = 'rgba(59,130,246,0.1)'; }}
         >
-          <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182" />
           </svg>
           Refresh
@@ -259,9 +267,9 @@ export default function HostOrders() {
         {[
           { label: 'Total Orders', value: stats.total, color: '#60a5fa', icon: '📋' },
           { label: 'Routed', value: stats.routed, color: '#34d399', icon: '✅' },
-          { label: 'Split Routed', value: stats.split, color: '#818cf8', icon: '🔀' },
+          { label: 'Cancelled', value: stats.cancelled, color: '#f87171', icon: '🚫' },
           { label: 'Fulfilled', value: stats.fulfilled, color: '#a78bfa', icon: '📦' },
-          { label: 'Total Revenue', value: formatCurrency(stats.revenue), color: '#fbbf24', icon: '💰' },
+          { label: 'Active Revenue', value: formatCurrency(stats.revenue), color: '#fbbf24', icon: '💰' },
         ].map(card => (
           <div key={card.label} style={{ ...S.glass, padding: '18px 20px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -387,8 +395,18 @@ export default function HostOrders() {
 
                     {/* Customer */}
                     <td style={{ padding: '14px 16px' }}>
-                      <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary)' }}>
-                        {order.customerName || 'Guest'}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary)' }}>
+                          {order.customerName || 'Guest'}
+                        </span>
+                        {(order.isFlashTest || (order.idempotencyKey || '').startsWith('flash-test-')) && (
+                          <span style={{
+                            fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 99,
+                            background: 'rgba(245, 158, 11, 0.14)', color: '#f59e0b',
+                          }}>
+                            ⚡ Stress Test
+                          </span>
+                        )}
                       </div>
                       {order.pincode && (
                         <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 2 }}>
