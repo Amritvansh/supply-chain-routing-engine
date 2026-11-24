@@ -16,14 +16,14 @@ describe('costFunction', () => {
   // ─── Distance Cost ──────────────────────────────────────────────
 
   describe('distance cost', () => {
-    test('calculates distance cost as distanceKm × 0.5', () => {
+    test('calculates distance cost as distanceKm × 0.75', () => {
       const result = calculateCost({
         distanceKm: 100,
         boxSize: 'SMALL',
         availableQty: 50,
         requestedQty: 1,
       });
-      expect(result.distanceCost).toBe(50);
+      expect(result.distanceCost).toBe(75);
     });
 
     test('zero distance produces zero distance cost', () => {
@@ -43,41 +43,41 @@ describe('costFunction', () => {
         availableQty: 50,
         requestedQty: 1,
       });
-      expect(result.distanceCost).toBe(16.67); // 33.33 * 0.5 = 16.665 → rounded to 16.67
+      expect(result.distanceCost).toBe(25); // 33.33 * 0.75 = 24.9975 → rounded to 25
     });
   });
 
   // ─── Packaging Cost ─────────────────────────────────────────────
 
   describe('packaging cost', () => {
-    test('SMALL box has packaging cost 1', () => {
+    test('SMALL box has packaging cost 10', () => {
       const result = calculateCost({
         distanceKm: 10,
         boxSize: 'SMALL',
         availableQty: 50,
         requestedQty: 1,
       });
-      expect(result.packagingCost).toBe(1);
+      expect(result.packagingCost).toBe(10);
     });
 
-    test('MEDIUM box has packaging cost 3', () => {
+    test('MEDIUM box has packaging cost 30', () => {
       const result = calculateCost({
         distanceKm: 10,
         boxSize: 'MEDIUM',
         availableQty: 50,
         requestedQty: 1,
       });
-      expect(result.packagingCost).toBe(3);
+      expect(result.packagingCost).toBe(30);
     });
 
-    test('LARGE box has packaging cost 7', () => {
+    test('LARGE box has packaging cost 50', () => {
       const result = calculateCost({
         distanceKm: 10,
         boxSize: 'LARGE',
         availableQty: 50,
         requestedQty: 1,
       });
-      expect(result.packagingCost).toBe(7);
+      expect(result.packagingCost).toBe(50);
     });
 
     test('throws on unknown box size', () => {
@@ -158,8 +158,8 @@ describe('costFunction', () => {
 
   describe('combined total cost', () => {
     test('totalCost is the sum of all three components', () => {
-      // distanceKm=20 → distanceCost=10
-      // boxSize=MEDIUM → packagingCost=3
+      // distanceKm=20 → distanceCost=15 (20 * 0.75)
+      // boxSize=MEDIUM → packagingCost=30
       // available=10, requested=5 → remaining=5 → depletionPenalty=10
       const result = calculateCost({
         distanceKm: 20,
@@ -167,10 +167,10 @@ describe('costFunction', () => {
         availableQty: 10,
         requestedQty: 5,
       });
-      expect(result.distanceCost).toBe(10);
-      expect(result.packagingCost).toBe(3);
+      expect(result.distanceCost).toBe(15);
+      expect(result.packagingCost).toBe(30);
       expect(result.depletionPenalty).toBe(10);
-      expect(result.totalCost).toBe(23);
+      expect(result.totalCost).toBe(55);
     });
 
     test('healthy stock, close warehouse, small box = low cost', () => {
@@ -180,8 +180,8 @@ describe('costFunction', () => {
         availableQty: 100,
         requestedQty: 1,
       });
-      // 4*0.5 + 1 + 0 = 3
-      expect(result.totalCost).toBe(3);
+      // 4*0.75 + 10 + 0 = 13
+      expect(result.totalCost).toBe(13);
     });
 
     test('far warehouse with empty-stock penalty is expensive', () => {
@@ -191,8 +191,8 @@ describe('costFunction', () => {
         availableQty: 3,
         requestedQty: 3,
       });
-      // 200*0.5 + 7 + 50 = 157
-      expect(result.totalCost).toBe(157);
+      // 200*0.75 + 50 + 50 = 250
+      expect(result.totalCost).toBe(250);
     });
   });
 

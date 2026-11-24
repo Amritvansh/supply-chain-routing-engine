@@ -3,12 +3,12 @@
  *
  * Implements the routing cost formula from the Hybrid Master Plan §1.3:
  *
- *   Total Cost = (distance_km × 0.5) + packaging_base_cost(box_size) + depletion_penalty(remaining)
+ *   Total Cost = (distance_km × 0.75) + packaging_base_cost(box_size) + depletion_penalty(remaining)
  *
  * Packaging base costs:
- *   SMALL  = 1
- *   MEDIUM = 3
- *   LARGE  = 7
+ *   SMALL  = 10
+ *   MEDIUM = 30
+ *   LARGE  = 50
  *
  * Depletion penalty tiers (applied AFTER the order would be fulfilled):
  *   remaining == 0  → 50   (warehouse will be emptied)
@@ -36,9 +36,9 @@
  * @type {Object<string, number>}
  */
 const PACKAGING_BASE_COST = {
-  SMALL: 1,
-  MEDIUM: 3,
-  LARGE: 7,
+  SMALL: 10,
+  MEDIUM: 30,
+  LARGE: 50,
 };
 
 /**
@@ -64,13 +64,13 @@ function calculateDepletionPenalty(remainingQty) {
  * @param {number} params.availableQty   - Current available_qty at the warehouse for this SKU
  * @param {number} params.requestedQty   - Quantity the customer is ordering
  * @returns {Object} Structured cost breakdown
- * @returns {number} return.distanceCost      - distance_km × 0.5
+ * @returns {number} return.distanceCost      - distance_km × 0.75
  * @returns {number} return.packagingCost     - base cost for the box tier
  * @returns {number} return.depletionPenalty  - penalty based on remaining stock
  * @returns {number} return.totalCost         - sum of all three components
  */
 function calculateCost({ distanceKm, boxSize, availableQty, requestedQty }) {
-  const distanceCost = distanceKm * 0.5;
+  const distanceCost = distanceKm * 0.75;
 
   const packagingCost = PACKAGING_BASE_COST[boxSize];
   if (packagingCost === undefined) {
