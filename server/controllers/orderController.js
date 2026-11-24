@@ -38,7 +38,13 @@ async function getAllOrders(req, res, next) {
         o.customer_name,
         o.shipping_address,
         o.pincode,
-        o.total_amount,
+        COALESCE(
+          o.total_amount,
+          (
+            COALESCE((SELECT SUM(oi2.qty * s2.price) FROM order_items oi2 JOIN skus s2 ON s2.sku = oi2.sku WHERE oi2.order_id = o.id), 0)
+            + COALESCE((SELECT SUM(sh2.total_cost) FROM shipments sh2 WHERE sh2.order_id = o.id), 0)
+          )
+        ) AS total_amount,
         o.user_id,
         COUNT(oi.id)::int AS item_count,
         COUNT(DISTINCT sh.id)::int AS shipment_count
@@ -49,21 +55,25 @@ async function getAllOrders(req, res, next) {
       ORDER BY o.created_at DESC
     `);
 
-    const orders = rows.map(row => ({
-      id: row.id,
-      status: row.status,
-      createdAt: row.created_at,
-      idempotencyKey: row.idempotency_key,
-      customerLat: row.customer_lat ? parseFloat(row.customer_lat) : null,
-      customerLng: row.customer_lng ? parseFloat(row.customer_lng) : null,
-      customerName: row.customer_name,
-      shippingAddress: row.shipping_address,
-      pincode: row.pincode,
-      totalAmount: row.total_amount ? parseFloat(row.total_amount) : null,
-      userId: row.user_id,
-      itemCount: row.item_count,
-      shipmentCount: row.shipment_count,
-    }));
+    const orders = rows.map(row => {
+      const isFlashTest = Boolean(row.idempotency_key && row.idempotency_key.startsWith('flash-test-'));
+      return {
+        id: row.id,
+        status: row.status,
+        createdAt: row.created_at,
+        idempotencyKey: row.idempotency_key,
+        isFlashTest,
+        customerLat: row.customer_lat ? parseFloat(row.customer_lat) : null,
+        customerLng: row.customer_lng ? parseFloat(row.customer_lng) : null,
+        customerName: row.customer_name || (isFlashTest ? 'Flash-Sale Stress Test' : null),
+        shippingAddress: row.shipping_address || (isFlashTest ? 'New Delhi (Stress Test)' : null),
+        pincode: row.pincode || (isFlashTest ? '110001' : null),
+        totalAmount: row.total_amount ? parseFloat(row.total_amount) : null,
+        userId: row.user_id,
+        itemCount: row.item_count,
+        shipmentCount: row.shipment_count,
+      };
+    });
 
     res.status(200).json({ orders, count: orders.length });
   } catch (err) {

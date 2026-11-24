@@ -448,6 +448,108 @@ router.get('/road-geometry', async (req, res, next) => {
   }
 });
 
+// ─── POST /api/v1/orders/:id/cancel ─────────────────────────────
+/**
+ * Customer cancel order endpoint.
+ * Reverts order status to CANCELLED and restores reserved inventory.
+ */
+router.post('/:id/cancel', optionalAuth, async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body || {};
+
+    const orderRes = await pool.query('SELECT id, status FROM orders WHERE id = $1', [id]);
+    if (orderRes.rows.length === 0) {
+      return res.status(404).json({ error: { message: 'Order not found' } });
+    }
+    const currentStatus = orderRes.rows[0].status;
+    if (currentStatus === 'DELIVERED' || currentStatus === 'FULFILLED') {
+      return res.status(400).json({ error: { message: 'Delivered orders cannot be cancelled. Please request a return.' } });
+    }
+    if (currentStatus === 'CANCELLED') {
+      return res.status(400).json({ error: { message: 'Order is already cancelled.' } });
+    }
+
+    // Update status to CANCELLED
+    await pool.query('UPDATE orders SET status = $1 WHERE id = $2', ['CANCELLED', id]);
+
+    // Restore inventory quantities across assigned warehouses
+    const shipmentItemsRes = await pool.query(
+      `SELECT sh.warehouse_id, si.sku, si.qty
+       FROM shipments sh
+       JOIN shipment_items si ON si.shipment_id = sh.id
+       WHERE sh.order_id = $1`,
+      [id]
+    );
+
+    if (shipmentItemsRes.rows.length > 0) {
+      for (const row of shipmentItemsRes.rows) {
+        await pool.query(
+          `UPDATE inventories
+           SET available_qty = available_qty + $1,
+               reserved_qty  = GREATEST(0, reserved_qty - $1)
+           WHERE warehouse_id = $2 AND sku = $3`,
+          [row.qty, row.warehouse_id, row.sku]
+        );
+      }
+    } else {
+      // Fallback for orders without separate shipment_items rows
+      const itemsRes = await pool.query('SELECT sku, qty FROM order_items WHERE order_id = $1', [id]);
+      const shipmentsRes = await pool.query('SELECT warehouse_id FROM shipments WHERE order_id = $1', [id]);
+      if (shipmentsRes.rows.length > 0 && itemsRes.rows.length > 0) {
+        const whId = shipmentsRes.rows[0].warehouse_id;
+        for (const item of itemsRes.rows) {
+          await pool.query(
+            `UPDATE inventories
+             SET available_qty = available_qty + $1,
+                 reserved_qty  = GREATEST(0, reserved_qty - $1)
+             WHERE warehouse_id = $2 AND sku = $3`,
+            [item.qty, whId, item.sku]
+          );
+        }
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Order has been successfully cancelled and inventory restored.',
+      status: 'CANCELLED',
+      reason: reason || 'Customer requested cancellation',
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── POST /api/v1/orders/:id/return ─────────────────────────────
+/**
+ * Customer return / refund request endpoint.
+ * Sets status to RETURN_REQUESTED and initiates reverse pickup.
+ */
+router.post('/:id/return', optionalAuth, async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { reason, refundMethod } = req.body || {};
+
+    const orderRes = await pool.query('SELECT id, status FROM orders WHERE id = $1', [id]);
+    if (orderRes.rows.length === 0) {
+      return res.status(404).json({ error: { message: 'Order not found' } });
+    }
+
+    await pool.query('UPDATE orders SET status = $1 WHERE id = $2', ['RETURN_REQUESTED', id]);
+
+    res.status(200).json({
+      success: true,
+      message: 'Return request received. Reverse logistics pickup scheduled.',
+      status: 'RETURN_REQUESTED',
+      reason: reason || 'Customer requested return',
+      refundMethod: refundMethod || 'Original Payment Source',
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ─── GET /api/v1/orders/track/:id ───────────────────────────────
 /**
  * Customer-facing order tracking.
@@ -845,10 +947,13 @@ router.get('/:id/explain',
       log.info({ orderId: id, shipmentCount: shipments.length, isMultiShipment }, 'Explain: shipments found');
 
       // ── Check cached explanation ──────────────────────────
-      log.debug({ orderId: id }, 'Explain: checking cache');
+      // Only serve cache immediately when it is a real Gemini response (unless ?refresh=true).
+      // Stale fallback_template cache entries automatically retry Gemini so they upgrade once Gemini recovers.
+      const forceRefresh = req.query.refresh === 'true';
+      log.debug({ orderId: id, forceRefresh }, 'Explain: checking cache');
       const cached = await getExplanation(id);
 
-      if (cached) {
+      if (cached && !forceRefresh && cached.source === 'gemini') {
         log.info({ orderId: id, cached: true }, 'Explain: cache hit');
 
         // For multi-shipment, explanation_text is a JSON array
@@ -1257,7 +1362,7 @@ router.post('/flash-test',
           }
 
           const skuData = await pool.query(
-            `SELECT sku, name, length_cm, width_cm, height_cm, weight_kg
+            `SELECT sku, name, price, length_cm, width_cm, height_cm, weight_kg
              FROM skus WHERE sku = $1`,
             [sku]
           );
@@ -1271,7 +1376,7 @@ router.post('/flash-test',
           }];
 
           const routing = selectOptimalWarehouse({ warehouses, orderItems });
-          if (routing.status !== 'ROUTED' && routing.status !== 'SPLIT_ROUTED') {
+          if (routing.status !== 'ROUTED' && routing.status !== 'SPLIT_ROUTED' && routing.status !== 'MULTI_WAREHOUSE_SPLIT') {
             const end = process.hrtime.bigint();
             return { status: 409, latencyMs: Number(end - start) / 1_000_000 };
           }
@@ -1285,11 +1390,18 @@ router.post('/flash-test',
           }
           locks.push({ sku, token: lockResult.token });
 
+          const deliveryCost = routing.totalCost ?? routing.chosen?.totalCost ?? 0;
+          const computedTotal = Math.round((((parseFloat(skuInfo.price) || 0) * qty) + deliveryCost) * 100) / 100;
+
           const txnResult = await executeCheckout({
             idempotencyKey: idemKey,
             customerLat, customerLng,
             items: [{ sku, qty }],
             routingDecision: routing,
+            customerName: 'Flash-Sale Stress Test',
+            shippingAddress: 'Connaught Place, New Delhi (Stress Test)',
+            pincode: '110001',
+            totalAmount: computedTotal,
           });
 
           const end = process.hrtime.bigint();

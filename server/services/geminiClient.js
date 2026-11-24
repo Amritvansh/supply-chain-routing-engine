@@ -29,8 +29,9 @@ const env = require('../config/env');
 const logger = require('./logger');
 const circuitBreaker = require('./geminiCircuitBreaker');
 
-const GEMINI_MODEL = 'gemini-2.0-flash';
-const GEMINI_TIMEOUT_MS = 3000;
+const GEMINI_MODEL = 'gemini-3.5-flash-lite';
+const GEMINI_MODEL_CANDIDATES = ['gemini-3.5-flash-lite', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'];
+const GEMINI_TIMEOUT_MS = 6000;
 
 /** Maximum number of retries (2 retries = 3 total attempts) */
 const MAX_RETRIES = 2;
@@ -174,9 +175,9 @@ function sleep(ms) {
  * @returns {Promise<string>} The generated text
  * @throws {Error} on timeout, API error, or empty response
  */
-async function callGemini(prompt) {
+async function callGemini(prompt, modelName = GEMINI_MODEL) {
   const genAI = new GoogleGenerativeAI(env.GEMINI_API_KEY);
-  const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
+  const model = genAI.getGenerativeModel({ model: modelName });
 
   // Hard timeout via AbortController
   const controller = new AbortController();
@@ -251,28 +252,29 @@ async function generateExplanation(routingResult, log) {
 
   const prompt = buildPrompt(routingResult);
 
-  // Retry loop with exponential backoff
+  // Retry loop with exponential backoff across live Gemini model candidates
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    const candidateModel = GEMINI_MODEL_CANDIDATES[attempt % GEMINI_MODEL_CANDIDATES.length] || GEMINI_MODEL;
     try {
       if (attempt > 0) {
         const delay = RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
-        _log.info({ attempt: attempt + 1, delayMs: delay }, 'Retrying Gemini call');
+        _log.info({ attempt: attempt + 1, model: candidateModel, delayMs: delay }, 'Retrying Gemini call');
         await sleep(delay);
       }
 
-      const text = await callGemini(prompt);
+      const text = await callGemini(prompt, candidateModel);
       const latencyMs = Date.now() - startTime;
 
       // Success — record with circuit breaker
       circuitBreaker.recordSuccess();
       _log.info(
-        { attempt: attempt + 1, latencyMs, source: 'gemini' },
+        { attempt: attempt + 1, model: candidateModel, latencyMs, source: 'gemini' },
         'Gemini explanation generated'
       );
 
       return {
         explanation: text,
-        modelUsed: GEMINI_MODEL,
+        modelUsed: candidateModel,
         source: 'gemini',
         latencyMs,
       };
