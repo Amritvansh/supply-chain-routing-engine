@@ -8,6 +8,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import * as api from '../lib/apiClient';
+import OSM_STYLE from '../lib/mapStyles';
 
 function formatINR(n) { return '₹' + Number(n).toLocaleString('en-IN'); }
 
@@ -37,7 +38,7 @@ export default function CustomerOrderTrack() {
     if (!mapRef.current) {
       mapRef.current = new maplibregl.Map({
         container: mapContainerRef.current,
-        style: 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json',
+        style: OSM_STYLE,
         center: [order.customerLng, order.customerLat],
         zoom: 4,
         interactive: true,

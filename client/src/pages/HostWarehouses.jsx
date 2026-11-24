@@ -14,6 +14,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import maplibregl from 'maplibre-gl';
 import * as api from '../lib/apiClient';
+import OSM_STYLE from '../lib/mapStyles';
 
 /* ── Constants ───────────────────────────────────────────── */
 const INDIA_CENTER = { lat: 20.5937, lng: 78.9629 };
@@ -188,7 +189,7 @@ function MapPicker({ lat, lng, onLocationChange }) {
 
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json',
+      style: OSM_STYLE,
       center: [lng || INDIA_CENTER.lng, lat || INDIA_CENTER.lat],
       zoom: lat && lng ? 10 : 4.5,
       attributionControl: true,

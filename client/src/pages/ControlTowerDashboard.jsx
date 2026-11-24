@@ -16,6 +16,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import maplibregl from 'maplibre-gl';
 import * as api from '../lib/apiClient';
+import OSM_STYLE from '../lib/mapStyles';
 
 /**
  * Low-stock threshold — matches the deterministic engine's
@@ -565,7 +566,7 @@ export default function ControlTowerDashboard() {
 
     const map = new maplibregl.Map({
       container: mapContainerRef.current,
-      style: 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json',
+      style: OSM_STYLE,
       center: [avgLng, avgLat],
       zoom: 4.5,
       attributionControl: true,

@@ -7,6 +7,7 @@ import maplibregl from 'maplibre-gl';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import * as api from '../lib/apiClient';
+import OSM_STYLE from '../lib/mapStyles';
 
 import 'maplibre-gl/dist/maplibre-gl.css';
 
@@ -72,7 +73,7 @@ export default function CheckoutPage() {
     if (mapRef.current || !mapContainerRef.current) return;
     const map = new maplibregl.Map({
       container: mapContainerRef.current,
-      style: 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json',
+      style: OSM_STYLE,
       center: [lng, lat],
       zoom: 15,
     });
