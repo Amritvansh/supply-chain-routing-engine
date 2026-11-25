@@ -9,7 +9,7 @@
  *   - Skips maps, charts, inputs, code/IDs, numbers, currency, and [data-no-translate]
  */
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { SUPPORTED_LANGUAGES } from '../lib/translations';
+import { SUPPORTED_LANGUAGES, UI_DICTIONARY } from '../lib/translations';
 import { translateTexts } from '../lib/apiClient';
 import storage from '../lib/storage';
 
@@ -45,11 +45,21 @@ function shouldSkipText(text, parentEl) {
 }
 
 function loadLangCache(lang) {
+  const dict = UI_DICTIONARY[lang] || {};
   try {
     const raw = localStorage.getItem(`ui_i18n_cache_${lang}`);
-    return raw ? JSON.parse(raw) : {};
+    const stored = raw ? JSON.parse(raw) : {};
+    const merged = { ...dict };
+    for (const [k, v] of Object.entries(stored)) {
+      if (v && v !== k) {
+        merged[k] = v;
+      }
+    }
+    // Pre-seeded dictionary entries always take precedence over stale English fallbacks
+    Object.assign(merged, dict);
+    return merged;
   } catch {
-    return {};
+    return { ...dict };
   }
 }
 
@@ -110,9 +120,8 @@ export function LanguageProvider({ children }) {
       return;
     }
 
-    if (!cacheRef.current[lang]) {
-      cacheRef.current[lang] = loadLangCache(lang);
-    }
+    // Always load the dictionary & cache for the selected language
+    cacheRef.current[lang] = loadLangCache(lang);
 
     let debounceTimer = null;
     let cancelled = false;
